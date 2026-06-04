@@ -1,6 +1,13 @@
 package com.palette.palette.entities;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "designers")
@@ -12,6 +19,9 @@ public class Designer {
 
     @Column(nullable = false)
     private String name;
+
+    @Column(nullable = false, unique = true)
+    private String email;
 
     @Column(length = 500)
     private String bio;
@@ -33,9 +43,10 @@ public class Designer {
     // ── Constructors ──────────────────────────────────────────────────────────
     public Designer() {}
 
-    public Designer(String name, Double hourlyRatePKR, String specialty, 
+    public Designer(String name, String email, Double hourlyRatePKR, String specialty, 
                     AestheticStyle preferredStyle) {
         this.name = name;
+        this.email = email;
         this.hourlyRatePKR = hourlyRatePKR;
         this.specialty = specialty;
         this.preferredStyle = preferredStyle;
@@ -47,6 +58,9 @@ public class Designer {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
@@ -82,6 +96,7 @@ public class Designer {
         return "Designer{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
+                ", email='" + email + '\'' +
                 ", specialty='" + specialty + '\'' +
                 ", hourlyRatePKR=" + hourlyRatePKR +
                 '}';
