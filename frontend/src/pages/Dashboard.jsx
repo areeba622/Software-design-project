@@ -13,19 +13,20 @@ const T = {
   warm:  "#E7DDD5",
   white: "#FFFFFF",
 }
+
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
 const BASE = "http://localhost:8081"
 
 function formatPrice(pkr, currency) {
-  if (currency === 'USD') return `$${(pkr / 280).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (currency === 'USD') {
+    return `$${(pkr / 280).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
   return `PKR ${pkr?.toLocaleString('en-PK')}`
 }
 
-// ─── Glassmorphism card ───────────────────────────────────────────────────────
-
 function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, index, accent, soon }) {
   const [hovered, setHovered] = useState(false)
-
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 28 }}
@@ -56,7 +57,6 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
         opacity: soon ? 0.55 : 1,
       }}
     >
-      {/* Subtle accent blob */}
       <div style={{
         position: 'absolute', top: -40, right: -40,
         width: 120, height: 120, borderRadius: '50%',
@@ -66,8 +66,7 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
         transition: 'opacity 0.3s',
         opacity: hovered ? 1 : 0.5,
       }} />
-
-      {/* Icon */}
+      
       <div style={{
         width: 48, height: 48, borderRadius: 14,
         background: hovered && !soon ? accent + '18' : 'rgba(231,221,213,0.5)',
@@ -77,7 +76,6 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
         <Icon size={22} color={hovered && !soon ? accent : T.stone} strokeWidth={1.8} style={{ transition: 'color 0.25s' }} />
       </div>
 
-      {/* Text */}
       <div style={{ flex: 1 }}>
         <p style={{
           fontFamily: FONT, fontSize: 10, fontWeight: 700,
@@ -99,10 +97,7 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
         </p>
       </div>
 
-      {/* CTA */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{
           fontFamily: FONT, fontSize: 13, fontWeight: 700,
           color: soon ? T.stone : (hovered ? accent : T.ink),
@@ -111,10 +106,7 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
           {soon ? 'Coming soon' : cta}
         </span>
         {!soon && (
-          <motion.div
-            animate={{ x: hovered ? 4 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
+          <motion.div animate={{ x: hovered ? 4 : 0 }} transition={{ duration: 0.2 }}>
             <FiChevronRight size={16} color={hovered ? accent : T.stone} />
           </motion.div>
         )}
@@ -122,8 +114,6 @@ function FeatureCard({ icon: Icon, eyebrow, title, description, cta, onClick, in
     </motion.div>
   )
 }
-
-// ─── Stat pill ────────────────────────────────────────────────────────────────
 
 function StatPill({ label, value, loading }) {
   return (
@@ -142,18 +132,18 @@ function StatPill({ label, value, loading }) {
   )
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
-
 export default function Dashboard({ user, onNavigate, onLogout }) {
   const currency = user?.currencyPreference || 'PKR'
   const [cartCount, setCartCount]   = useState(0)
   const [orderCount, setOrderCount] = useState(0)
   const [loading, setLoading]       = useState(true)
+
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   useEffect(() => {
     if (!user) return
+    
     Promise.all([
       fetch(`${BASE}/api/cart?userId=${user.userId}`).then(r => r.json()).catch(() => null),
       fetch(`${BASE}/api/order?userId=${user.userId}`).then(r => r.json()).catch(() => []),
@@ -198,9 +188,8 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
       title: 'Build Custom Room',
       description: 'Pick products piece by piece and assemble your own bespoke furniture bundle.',
       cta: 'Start building',
-      page: 'customRoom',
+      page: 'room-builder',
       accent: '#059669',
-      soon: true,
     },
     {
       icon: FiShoppingBag,
@@ -220,7 +209,7 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
       background: 'linear-gradient(145deg, #f5ede6 0%, #fafaf9 40%, #ede8e3 100%)',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* Background blobs */}
+      {/* Decorative Blur Spheres */}
       <div style={{
         position: 'fixed', top: -200, right: -200, width: 600, height: 600,
         borderRadius: '50%', background: 'radial-gradient(circle, rgba(194,65,12,0.06) 0%, transparent 70%)',
@@ -232,16 +221,15 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
         pointerEvents: 'none', zIndex: 0,
       }} />
 
-      {/* Navbar */}
+      {/* Navigation Header */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 100,
         background: 'rgba(250,250,249,0.82)',
         backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
         borderBottom: '1px solid rgba(231,221,213,0.6)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyBetween: 'space-between',
         padding: '0 2.5rem', height: 64,
       }}>
-        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
             <rect x="1" y="1" width="11" height="11" rx="2" fill={T.ink} />
@@ -254,9 +242,7 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
           </span>
         </div>
 
-        {/* Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Cart */}
           <button onClick={() => onNavigate('catalog')} style={{
             position: 'relative', background: 'rgba(255,255,255,0.7)',
             border: '1.5px solid rgba(231,221,213,0.8)',
@@ -278,7 +264,6 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
             )}
           </button>
 
-          {/* User pill */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'rgba(255,255,255,0.7)',
@@ -298,7 +283,6 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
             </span>
           </div>
 
-          {/* Logout */}
           <button onClick={onLogout} style={{
             background: 'none', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 5,
@@ -310,10 +294,8 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
         </div>
       </nav>
 
-      {/* Content */}
+      {/* Main Content Dashboard Layout */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '3.5rem 2rem 5rem', position: 'relative', zIndex: 1 }}>
-
-        {/* Hero greeting */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -338,8 +320,7 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
           }}>
             Welcome to your Palette studio. What would you like to design today?
           </p>
-
-          {/* Stat pills */}
+          
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <StatPill label="Items in cart" value={cartCount} loading={loading} />
             <StatPill label="Past orders" value={orderCount} loading={loading} />
@@ -347,7 +328,7 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
           </div>
         </motion.div>
 
-        {/* Feature cards grid */}
+        {/* Feature Grid Links */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
@@ -363,7 +344,6 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
           ))}
         </div>
 
-        {/* Footer note */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

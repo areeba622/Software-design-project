@@ -130,10 +130,10 @@ public class DesignQuizService {
         return new ProductDTO(
             product.getId(),
             product.getName(),
+            product.getPriceInPKR(),
             product.getCategory() != null ? product.getCategory().toString() : "OTHER",
             product.getRoomType() != null ? product.getRoomType().toString() : "UNKNOWN",
-            product.getPriceInPKR(),
-            null
+            product.getAestheticStyle() != null ? product.getAestheticStyle().toString() : null
         );
     }
 }

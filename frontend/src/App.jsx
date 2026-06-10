@@ -1,57 +1,35 @@
+// src/App.jsx
 import { useState } from "react"
 import LandingPage from "./LandingPage"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
-import Dashboard from "./pages/Dashboard"
+import Dashboard from "./pages/Dashboard";         
 import ProductCatalog from "./pages/ProductCatalog"
 import DesignQuiz from "./pages/DesignQuiz"
+import RoomBuilder from "./pages/RoomBuilder" 
+import CartCheckoutFlow from "./CartCheckoutFlow" // ← IMPORT NEW FLOW FROM YOUR FILE
 
 export default function App() {
-  const [page, setPage]               = useState("landing")
-  const [user, setUser]               = useState(null)
-  const [intendedPage, setIntendedPage] = useState(null)
+  const [page, setPage] = useState("landing")
+  const [user, setUser] = useState(null)
 
   const handleAuth = (userData) => {
     setUser(userData)
-    if (intendedPage) {
-      setPage(intendedPage)
-      setIntendedPage(null)
-    } else {
-      setPage("dashboard")
-    }
+    setPage("dashboard") // ← Direct users to Dashboard upon logging in / registering
   }
 
   const handleLogout = () => {
     setUser(null)
-    setIntendedPage(null)
     setPage("landing")
   }
 
-  const goTo = (destination) => {
-    if (!user && destination !== "landing") {
-      setIntendedPage(destination)
-      setPage("login")
-      return
-    }
-    setPage(destination)
-  }
+  // ─── AUTH PAGES ───────────────────────────────────────────────────────────
 
-  // ─── Landing ──────────────────────────────────────────────────────────────
-  if (page === "landing")
-    return (
-      <LandingPage
-        onLogin={() => setPage("login")}
-        onRegister={() => setPage("register")}
-        onQuiz={() => goTo("quiz")}
-      />
-    )
-
-  // ─── Auth ─────────────────────────────────────────────────────────────────
   if (page === "login")
     return (
       <Login
         onSwitch={() => setPage("register")}
-        onBack={() => { setIntendedPage(null); setPage("landing") }}
+        onBack={() => setPage("landing")}
         onSuccess={handleAuth}
       />
     )
@@ -60,17 +38,19 @@ export default function App() {
     return (
       <Register
         onSwitch={() => setPage("login")}
-        onBack={() => { setIntendedPage(null); setPage("landing") }}
+        onBack={() => setPage("landing")}
         onSuccess={handleAuth}
       />
     )
 
-  // ─── App ──────────────────────────────────────────────────────────────────
+  // ─── MAIN APP PAGES (AUTHENTICATED) ───────────────────────────────────────
+
+  // This handles the Dashboard views and hooks up your onNavigate setup
   if (page === "dashboard")
     return (
       <Dashboard
         user={user}
-        onNavigate={goTo}
+        onNavigate={(targetPage) => setPage(targetPage)} // Handles 'room-builder', 'catalog', 'quiz', 'cart-checkout', etc.
         onLogout={handleLogout}
       />
     )
@@ -79,8 +59,10 @@ export default function App() {
     return (
       <ProductCatalog
         user={user}
-        onBack={() => setPage("dashboard")}
+        onQuiz={() => setPage("quiz")}
+        onRoomBuilder={() => setPage("room-builder")}
         onLogout={handleLogout}
+        onBack={() => setPage("dashboard")} // Allows navigating back to studio dashboard
       />
     )
 
@@ -88,10 +70,48 @@ export default function App() {
     return (
       <DesignQuiz
         user={user}
-        onBack={() => setPage("dashboard")}
+        onBack={() => setPage("dashboard")} // Takes them back to dashboard
       />
     )
 
-  // Fallback
-  return <LandingPage onLogin={() => setPage("login")} onRegister={() => setPage("register")} />
+  if (page === "room-builder")
+    return (
+      <RoomBuilder
+        user={user}
+        onBack={() => setPage("dashboard")} // Takes them back to dashboard
+      />
+    )
+
+  // ─── PALETTE CHECKOUT & CART FLOW ─────────────────────────────────────────
+
+  if (page === "cart-checkout")
+    return (
+      <CartCheckoutFlow 
+        // Passes back to the main dashboard when user exits or completes payment
+        onBack={() => setPage("dashboard")} 
+      />
+    )
+
+  // ─── LANDING PAGE ─────────────────────────────────────────────────────────
+
+  return (
+    <LandingPage
+      onLogin={() => setPage("login")}
+      onRegister={() => setPage("register")}
+      onQuiz={() => {
+        if (user) {
+          setPage("quiz")
+        } else {
+          setPage("login")
+        }
+      }}
+      onRoomBuilder={() => {
+        if (user) {
+          setPage("room-builder")
+        } else {
+          setPage("login")
+        }
+      }}
+    />
+  )
 }
