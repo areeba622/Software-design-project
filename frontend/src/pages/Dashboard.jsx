@@ -187,10 +187,9 @@ export default function Dashboard({ user, onNavigate, onLogout }) {
       eyebrow: 'DESIGNERS',
       title: 'View Designers',
       description: 'Connect with elite interior designers available for hire on your next project.',
-      cta: 'Meet the team',
+      cta: 'View designers',
       page: 'designers',
       accent: '#0891B2',
-      soon: true,
     },
     {
       icon: FiBox,

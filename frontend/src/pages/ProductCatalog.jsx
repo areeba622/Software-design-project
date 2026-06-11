@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence, useInView } from "framer-motion"
-import { FiSearch, FiShoppingCart, FiX, FiChevronDown, FiLogOut, FiGrid, FiList } from "react-icons/fi"
+import { FiSearch, FiShoppingCart, FiX, FiChevronDown, FiLogOut } from "react-icons/fi"
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -230,7 +230,7 @@ function ProductCard({ product, currency, onAddToCart, index }) {
         flexDirection: "column",
       }}
     >
-      {/* Image placeholder */}
+      {/* Image Container with Safe Fallback Handling */}
       <div style={{
         height: 200, background: `linear-gradient(135deg, #f5ede6 0%, #ede8e3 100%)`,
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -241,7 +241,10 @@ function ProductCard({ product, currency, onAddToCart, index }) {
             src={product.imageUrl}
             alt={product.name}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={e => { e.target.style.display = "none" }}
+            onError={e => { 
+              // Fallback: Agar broken link ho ya lowercase/uppercase issue ho
+              e.target.src = "/products/minimalist/Bed1.jpeg" 
+            }}
           />
         ) : (
           <div style={{ textAlign: "center" }}>
@@ -505,19 +508,19 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
 export default function ProductCatalog({ user, onBack, onLogout }) {
   const currency = user?.currencyPreference || "PKR"
 
-  // Data
+  // Data State
   const [products, setProducts]     = useState([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
 
-  // Filters
+  // Filter States
   const [search, setSearch]         = useState("")
   const [category, setCategory]     = useState("ALL")
   const [roomType, setRoomType]     = useState("ALL")
   const [style, setStyle]           = useState("ALL")
   const [maxPrice, setMaxPrice]     = useState(null)
 
-  // UI
+  // UI States
   const [cartOpen, setCartOpen]     = useState(false)
   const [cartCount, setCartCount]   = useState(0)
   const [addError, setAddError]     = useState(null)
@@ -531,18 +534,24 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
     try {
       let url = `${BASE}/api/products`
 
-      if (search.trim())          url = `${BASE}/api/products/search?keyword=${encodeURIComponent(search.trim())}`
-      else if (maxPrice)          url = `${BASE}/api/products/filter?maxPrice=${maxPrice}`
+      if (search.trim())           url = `${BASE}/api/products/search?keyword=${encodeURIComponent(search.trim())}`
+      else if (maxPrice)           url = `${BASE}/api/products/filter?maxPrice=${maxPrice}`
       else if (category !== "ALL") url = `${BASE}/api/products/category/${category}`
 
       const res = await fetch(url)
       if (!res.ok) throw new Error("Failed to load products")
       let data = await res.json()
 
-      // Client-side filter for room + style (backend doesn't combine these in one endpoint)
-      if (roomType !== "ALL") data = data.filter(p => p.roomType === roomType)
-      if (style !== "ALL")    data = data.filter(p => p.aestheticStyle === style)
-      if (maxPrice && search.trim()) data = data.filter(p => p.priceInPKR <= maxPrice)
+      // Robust client-side comparison handling strings safely
+      if (roomType !== "ALL") {
+        data = data.filter(p => p.roomType?.toUpperCase() === roomType.toUpperCase())
+      }
+      if (style !== "ALL") {
+        data = data.filter(p => p.aestheticStyle?.toUpperCase() === style.toUpperCase())
+      }
+      if (maxPrice && search.trim()) {
+        data = data.filter(p => p.priceInPKR <= maxPrice)
+      }
 
       setProducts(data)
     } catch (e) {
@@ -635,9 +644,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.08 }}
-          style={{
-            position: "relative", marginBottom: "1.25rem",
-          }}
+          style={{ position: "relative", marginBottom: "1.25rem" }}
         >
           <FiSearch style={{
             position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
@@ -674,10 +681,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.12 }}
-          style={{
-            display: "flex", gap: 8, flexWrap: "wrap",
-            marginBottom: "1rem",
-          }}
+          style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1rem" }}
         >
           {CATEGORIES.map(cat => (
             <Pill key={cat} label={cat} active={category === cat} onClick={() => setCategory(cat)} />
@@ -689,10 +693,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.16 }}
-          style={{
-            display: "flex", gap: 10, flexWrap: "wrap",
-            marginBottom: "2rem", alignItems: "center",
-          }}
+          style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "2rem", alignItems: "center" }}
         >
           <Dropdown
             label={roomType === "ALL" ? "Room type" : roomLabel(roomType)}
@@ -724,7 +725,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
           )}
         </motion.div>
 
-        {/* Add to cart error */}
+        {/* Add to cart error drawer */}
         <AnimatePresence>
           {addError && (
             <motion.div
@@ -745,16 +746,9 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
 
         {/* Loading skeleton */}
         {loading && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: "1.25rem",
-          }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1.25rem" }}>
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} style={{
-                background: T.white, border: `1.5px solid ${T.warm}`,
-                borderRadius: 14, overflow: "hidden",
-              }}>
+              <div key={i} style={{ background: T.white, border: `1.5px solid ${T.warm}`, borderRadius: 14, overflow: "hidden" }}>
                 <div style={{ height: 200, background: `linear-gradient(90deg, #f0e9e4 25%, #fafaf9 50%, #f0e9e4 75%)` }} />
                 <div style={{ padding: 16 }}>
                   <div style={{ height: 12, background: T.linen, borderRadius: 4, marginBottom: 8, width: "60%" }} />
@@ -766,23 +760,16 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* Error */}
+        {/* Error State */}
         {!loading && error && (
-          <div style={{
-            textAlign: "center", padding: "4rem 2rem",
-            fontFamily: FONT, color: "#b91c1c", fontSize: 14,
-          }}>
+          <div style={{ textAlign: "center", padding: "4rem 2rem", fontFamily: FONT, color: "#b91c1c", fontSize: 14 }}>
             {error} — <button onClick={fetchProducts} style={{ background: "none", border: "none", color: T.clay, cursor: "pointer", fontWeight: 600, fontFamily: FONT }}>retry</button>
           </div>
         )}
 
-        {/* Grid */}
+        {/* Product Grid Layout */}
         {!loading && !error && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: "1.25rem",
-          }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1.25rem" }}>
             {products.length === 0
               ? <EmptyState hasFilters={!!hasFilters} onClear={clearFilters} />
               : products.map((p, i) => (
@@ -799,7 +786,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
         )}
       </div>
 
-      {/* Cart drawer */}
+      {/* Cart side drawer overlay */}
       <CartDrawer
         open={cartOpen}
         user={user}
@@ -807,8 +794,7 @@ export default function ProductCatalog({ user, onBack, onLogout }) {
         onClose={() => setCartOpen(false)}
         onCheckout={(cart) => {
           setCartOpen(false)
-          // onCheckout prop will be wired in next page
-          console.log("Checkout with cart:", cart)
+          console.log("Checkout triggered with cart:", cart)
         }}
       />
     </div>

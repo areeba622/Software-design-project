@@ -6,6 +6,9 @@ import Dashboard from "./pages/Dashboard"
 import ProductCatalog from "./pages/ProductCatalog"
 import DesignQuiz from "./pages/DesignQuiz"
 
+// 1. CHNAGE: Sahi path ke sath Designers import kiya (Kyunki file 'pages' folder ke andar hai)
+import DesignersPage from "./pages/Designers" 
+
 export default function App() {
   const [page, setPage]               = useState("landing")
   const [user, setUser]               = useState(null)
@@ -87,6 +90,15 @@ export default function App() {
   if (page === "quiz")
     return (
       <DesignQuiz
+        user={user}
+        onBack={() => setPage("dashboard")}
+      />
+    )
+
+  // 2. CHANGE: Bina kuch purana delete kiye, naya page yahan add kar diya
+  if (page === "designers")
+    return (
+      <DesignersPage
         user={user}
         onBack={() => setPage("dashboard")}
       />
