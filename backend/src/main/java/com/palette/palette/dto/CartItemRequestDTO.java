@@ -2,15 +2,7 @@ package com.palette.palette.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class CartItemRequestDTO {
 
     @NotNull(message = "Item ID must not be null")
@@ -23,4 +15,47 @@ public class CartItemRequestDTO {
     // Accepted values: "PRODUCT" or "BUNDLE"
     @NotNull(message = "Item type must not be null")
     private String itemType;
+
+    private Double unitPrice;
+
+    public CartItemRequestDTO() {}
+
+    public CartItemRequestDTO(Long itemId, Integer quantity, String itemType, Double unitPrice) {
+        this.itemId = itemId;
+        this.quantity = quantity;
+        this.itemType = itemType;
+        this.unitPrice = unitPrice;
+    }
+
+    public Long getItemId() {
+        return itemId;
+    }
+
+    public void setItemId(Long itemId) {
+        this.itemId = itemId;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getItemType() {
+        return itemType;
+    }
+
+    public void setItemType(String itemType) {
+        this.itemType = itemType;
+    }
+
+    public Double getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(Double unitPrice) {
+        this.unitPrice = unitPrice;
+    }
 }
