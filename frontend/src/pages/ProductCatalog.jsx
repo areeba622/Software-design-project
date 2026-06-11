@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react"
+
 import { motion, AnimatePresence, useInView } from "framer-motion"
+
 import { FiSearch, FiShoppingCart, FiX, FiChevronDown, FiLogOut, FiGrid, FiList } from "react-icons/fi"
+
+
+
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
 
@@ -494,28 +499,46 @@ function ProductCard({ product, currency, onAddToCart, index }) {
       }}
 
     >
-      {/* Image Container with Safe Fallback Handling */}
+
+      {/* Image placeholder */}
+
       <div style={{
+
         height: 200, background: `linear-gradient(135deg, #f5ede6 0%, #ede8e3 100%)`,
+
         display: "flex", alignItems: "center", justifyContent: "center",
+
         position: "relative", overflow: "hidden",
+
       }}>
+
         {product.imageUrl ? (
+
           <img
+
             src={product.imageUrl}
+
             alt={product.name}
+
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={e => { 
-              // Fallback: Agar broken link ho ya lowercase/uppercase issue ho
-              e.target.src = "/products/minimalist/Bed1.jpeg" 
-            }}
+
+            onError={e => { e.target.style.display = "none" }}
+
           />
+
         ) : (
+
           <div style={{ textAlign: "center" }}>
+
             <div style={{ fontSize: 32, marginBottom: 4 }}>🪑</div>
+
             <span style={{ fontFamily: FONT, fontSize: 11, color: T.stone }}>{categoryLabel(product.category || "OTHER")}</span>
+
           </div>
+
         )}
+
+
 
         {/* Style badge */}
 
@@ -787,7 +810,13 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
 
 
 
+  // ── CHANGE 1: optimistic remove ──
   const removeItem = async (cartItemId) => {
+
+    setCart(prev => ({
+      ...prev,
+      lines: prev.lines.filter(l => l.cartItemId !== cartItemId)
+    }))
 
     await fetch(`${BASE}/api/cart/remove/${cartItemId}?userId=${user.userId}`, { method: "DELETE" })
 
@@ -1019,81 +1048,142 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ── CHANGE 2b: added onCheckout to props ──
+export default function ProductCatalog({ user, onBack, onLogout, onRoomBuilder, onCheckout }) {
 
-export default function ProductCatalog({ user, onBack, onLogout, onRoomBuilder }) {
   const currency = user?.currencyPreference || "PKR"
 
-  // Data State
+
+
+  // Data
+
   const [products, setProducts]     = useState([])
+
   const [loading, setLoading]       = useState(true)
+
   const [error, setError]           = useState(null)
 
-  // Filter States
+
+
+  // Filters
+
   const [search, setSearch]         = useState("")
+
   const [category, setCategory]     = useState("ALL")
+
   const [roomType, setRoomType]     = useState("ALL")
+
   const [style, setStyle]           = useState("ALL")
+
   const [maxPrice, setMaxPrice]     = useState(null)
 
-  // UI States
+
+
+  // UI
+
   const [cartOpen, setCartOpen]     = useState(false)
+
   const [cartCount, setCartCount]   = useState(0)
+
   const [addError, setAddError]     = useState(null)
+
+
 
   const searchTimeout = useRef(null)
 
+
+
   // ── Fetch products ──
+
   const fetchProducts = async () => {
+
     setLoading(true)
+
     setError(null)
+
     try {
+
       let url = `${BASE}/api/products`
 
-      if (search.trim())           url = `${BASE}/api/products/search?keyword=${encodeURIComponent(search.trim())}`
-      else if (maxPrice)           url = `${BASE}/api/products/filter?maxPrice=${maxPrice}`
+
+
+      if (search.trim())          url = `${BASE}/api/products/search?keyword=${encodeURIComponent(search.trim())}`
+
+      else if (maxPrice)          url = `${BASE}/api/products/filter?maxPrice=${maxPrice}`
+
       else if (category !== "ALL") url = `${BASE}/api/products/category/${category}`
 
+
+
       const res = await fetch(url)
+
       if (!res.ok) throw new Error("Failed to load products")
+
       let data = await res.json()
 
-      // Robust client-side comparison handling strings safely
-      if (roomType !== "ALL") {
-        data = data.filter(p => p.roomType?.toUpperCase() === roomType.toUpperCase())
-      }
-      if (style !== "ALL") {
-        data = data.filter(p => p.aestheticStyle?.toUpperCase() === style.toUpperCase())
-      }
-      if (maxPrice && search.trim()) {
-        data = data.filter(p => p.priceInPKR <= maxPrice)
-      }
+
+
+      // Client-side filter for room + style (backend doesn't combine these in one endpoint)
+
+      if (roomType !== "ALL") data = data.filter(p => p.roomType === roomType)
+
+      if (style !== "ALL")    data = data.filter(p => p.aestheticStyle === style)
+
+      if (maxPrice && search.trim()) data = data.filter(p => p.priceInPKR <= maxPrice)
+
+
 
       setProducts(data)
+
     } catch (e) {
+
       setError(e.message)
+
     } finally {
+
       setLoading(false)
+
     }
+
   }
+
+
 
   useEffect(() => {
+
     clearTimeout(searchTimeout.current)
+
     searchTimeout.current = setTimeout(fetchProducts, search ? 400 : 0)
+
     return () => clearTimeout(searchTimeout.current)
+
   }, [search, category, roomType, style, maxPrice])
 
+
+
   // ── Fetch cart count ──
+
   const refreshCartCount = async () => {
+
     if (!user) return
+
     try {
+
       const res = await fetch(`${BASE}/api/cart?userId=${user.userId}`)
+
       const d = await res.json()
+
       setCartCount(d?.lines?.length || 0)
+
     } catch (_) {}
+
   }
 
+
+
   useEffect(() => { refreshCartCount() }, [])
+
+
 
   // ── Add to cart ──
 
@@ -1215,80 +1305,173 @@ export default function ProductCatalog({ user, onBack, onLogout, onRoomBuilder }
 
         </motion.div>
 
-{/* Search bar */}
+
+
+        {/* Search bar */}
+
         <motion.div
+
           initial={{ opacity: 0, y: 16 }}
+
           animate={{ opacity: 1, y: 0 }}
+
           transition={{ duration: 0.45, delay: 0.08 }}
-          style={{ position: "relative", marginBottom: "1.25rem" }}
+
+          style={{
+
+            position: "relative", marginBottom: "1.25rem",
+
+          }}
+
         >
+
           <FiSearch style={{
+
             position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+
             color: T.stone, pointerEvents: "none",
+
           }} size={16} />
+
           <input
+
             type="text"
+
             placeholder="Search products…"
+
             value={search}
+
             onChange={e => setSearch(e.target.value)}
+
             style={{
+
               width: "100%", boxSizing: "border-box",
+
               padding: "11px 40px 11px 42px",
+
               borderRadius: 10, border: `1.5px solid ${T.warm}`,
+
               background: T.white, fontFamily: FONT, fontSize: 14, color: T.ink,
+
               outline: "none", transition: "border-color 0.2s",
+
             }}
+
             onFocus={e => e.target.style.borderColor = T.ink}
+
             onBlur={e => e.target.style.borderColor = T.warm}
+
           />
+
           {search && (
+
             <button onClick={() => setSearch("")} style={{
+
               position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+
               background: "none", border: "none", cursor: "pointer", color: T.stone,
+
               display: "flex", alignItems: "center",
+
             }}>
+
               <FiX size={15} />
+
             </button>
+
           )}
+
         </motion.div>
+
+
 
         {/* Category pills */}
+
         <motion.div
+
           initial={{ opacity: 0, y: 12 }}
+
           animate={{ opacity: 1, y: 0 }}
+
           transition={{ duration: 0.4, delay: 0.12 }}
-          style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1rem" }}
+
+          style={{
+
+            display: "flex", gap: 8, flexWrap: "wrap",
+
+            marginBottom: "1rem",
+
+          }}
+
         >
+
           {CATEGORIES.map(cat => (
+
             <Pill key={cat} label={cat} active={category === cat} onClick={() => setCategory(cat)} />
+
           ))}
+
         </motion.div>
 
+
+
         {/* Dropdowns row */}
+
         <motion.div
+
           initial={{ opacity: 0, y: 12 }}
+
           animate={{ opacity: 1, y: 0 }}
+
           transition={{ duration: 0.4, delay: 0.16 }}
-          style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: "2rem", alignItems: "center" }}
+
+          style={{
+
+            display: "flex", gap: 10, flexWrap: "wrap",
+
+            marginBottom: "2rem", alignItems: "center",
+
+          }}
+
         >
+
           <Dropdown
+
             label={roomType === "ALL" ? "Room type" : roomLabel(roomType)}
+
             value={roomType}
+
             options={roomDropdownOptions}
+
             onChange={setRoomType}
+
           />
+
           <Dropdown
+
             label={style === "ALL" ? "Style" : style.charAt(0) + style.slice(1).toLowerCase()}
+
             value={style}
+
             options={styleDropdownOptions}
+
             onChange={setStyle}
+
           />
+
           <Dropdown
+
             label={priceDropdownLabel}
+
             value={maxPrice}
+
             options={PRICE_CAPS}
+
             onChange={setMaxPrice}
+
           />
+
+
 
           {hasFilters && (
 
@@ -1311,78 +1494,182 @@ export default function ProductCatalog({ user, onBack, onLogout, onRoomBuilder }
         </motion.div>
 
 
-        {/* Add to cart error drawer */}
+
+        {/* Add to cart error */}
+
         <AnimatePresence>
+
           {addError && (
+
             <motion.div
+
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+
               style={{
+
                 marginBottom: "1rem", padding: "10px 14px", borderRadius: 8,
+
                 background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca",
+
                 fontFamily: FONT, fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center",
+
               }}
+
             >
+
               {addError}
+
               <button onClick={() => setAddError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#b91c1c" }}>
+
                 <FiX size={14} />
+
               </button>
+
             </motion.div>
+
           )}
+
         </AnimatePresence>
 
+
+
         {/* Loading skeleton */}
+
         {loading && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1.25rem" }}>
+
+          <div style={{
+
+            display: "grid",
+
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+
+            gap: "1.25rem",
+
+          }}>
+
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} style={{ background: T.white, border: `1.5px solid ${T.warm}`, borderRadius: 14, overflow: "hidden" }}>
+
+              <div key={i} style={{
+
+                background: T.white, border: `1.5px solid ${T.warm}`,
+
+                borderRadius: 14, overflow: "hidden",
+
+              }}>
+
                 <div style={{ height: 200, background: `linear-gradient(90deg, #f0e9e4 25%, #fafaf9 50%, #f0e9e4 75%)` }} />
+
                 <div style={{ padding: 16 }}>
+
                   <div style={{ height: 12, background: T.linen, borderRadius: 4, marginBottom: 8, width: "60%" }} />
+
                   <div style={{ height: 16, background: T.linen, borderRadius: 4, marginBottom: 8 }} />
+
                   <div style={{ height: 12, background: T.linen, borderRadius: 4, width: "80%" }} />
+
                 </div>
+
               </div>
+
             ))}
+
           </div>
+
         )}
 
-        {/* Error State */}
+
+
+        {/* Error */}
+
         {!loading && error && (
-          <div style={{ textAlign: "center", padding: "4rem 2rem", fontFamily: FONT, color: "#b91c1c", fontSize: 14 }}>
+
+          <div style={{
+
+            textAlign: "center", padding: "4rem 2rem",
+
+            fontFamily: FONT, color: "#b91c1c", fontSize: 14,
+
+          }}>
+
             {error} — <button onClick={fetchProducts} style={{ background: "none", border: "none", color: T.clay, cursor: "pointer", fontWeight: 600, fontFamily: FONT }}>retry</button>
+
           </div>
+
         )}
 
-        {/* Product Grid Layout */}
+
+
+        {/* Grid */}
+
         {!loading && !error && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1.25rem" }}>
+
+          <div style={{
+
+            display: "grid",
+
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+
+            gap: "1.25rem",
+
+          }}>
+
             {products.length === 0
+
               ? <EmptyState hasFilters={!!hasFilters} onClear={clearFilters} />
+
               : products.map((p, i) => (
+
                   <ProductCard
+
                     key={p.id}
+
                     product={p}
+
                     currency={currency}
+
                     onAddToCart={addToCart}
+
                     index={i}
+
                   />
+
                 ))
+
             }
+
           </div>
+
         )}
+
       </div>
 
-      {/* Cart side drawer overlay */}
+
+
+      {/* Cart drawer */}
+
       <CartDrawer
+
         open={cartOpen}
+
         user={user}
+
         currency={currency}
+
         onClose={() => setCartOpen(false)}
+
+        // ── CHANGE 2a: replaced console.log with onCheckout prop call ──
         onCheckout={(cart) => {
+
           setCartOpen(false)
-          console.log("Checkout triggered with cart:", cart)
+
+          onCheckout?.(cart)
+
         }}
+
       />
+
     </div>
+
   )
+
 }

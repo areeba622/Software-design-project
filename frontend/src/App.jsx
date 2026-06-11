@@ -3,27 +3,39 @@ import { useState } from "react"
 import LandingPage from "./LandingPage"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
-import Dashboard from "./pages/Dashboard";         
+import Dashboard from "./pages/Dashboard"
 import ProductCatalog from "./pages/ProductCatalog"
 import DesignQuiz from "./pages/DesignQuiz"
-import RoomBuilder from "./pages/RoomBuilder" 
-import CartCheckoutFlow from "./CartCheckoutFlow" // ← IMPORT NEW FLOW FROM YOUR FILE
-
-// 1. CHNAGE: Sahi path ke sath Designers import kiya (Kyunki file 'pages' folder ke andar hai)
-import DesignersPage from "./pages/Designers" 
+import RoomBuilder from "./pages/RoomBuilder"
+import CartCheckoutFlow from "./CartCheckoutFlow"
+import DesignersPage from "./pages/Designers"
+// ── NEW: import PaymentPage ──
+import PaymentPage from "./pages/PaymentPage"
 
 export default function App() {
   const [page, setPage] = useState("landing")
   const [user, setUser] = useState(null)
 
+  // ── NEW: cart state passed into PaymentPage ──
+  // Holds the cart object received from either CartDrawer (ProductCatalog)
+  // or the RoomBuilder "Build Room" flow, before navigating to payment.
+  const [pendingCart, setPendingCart] = useState(null)
+
   const handleAuth = (userData) => {
     setUser(userData)
-    setPage("dashboard") // ← Direct users to Dashboard upon logging in / registering
+    setPage("dashboard")
   }
 
   const handleLogout = () => {
     setUser(null)
     setPage("landing")
+  }
+
+  // ── NEW: shared handler — called by both ProductCatalog and RoomBuilder ──
+  // Receives the cart object, stores it, then navigates to the payment page.
+  const handleGoToPayment = (cart) => {
+    setPendingCart(cart)
+    setPage("payment")
   }
 
   // ─── AUTH PAGES ───────────────────────────────────────────────────────────
@@ -46,14 +58,13 @@ export default function App() {
       />
     )
 
-  // ─── MAIN APP PAGES (AUTHENTICATED) ───────────────────────────────────────
+  // ─── MAIN APP PAGES ───────────────────────────────────────────────────────
 
-  // This handles the Dashboard views and hooks up your onNavigate setup
   if (page === "dashboard")
     return (
       <Dashboard
         user={user}
-        onNavigate={(targetPage) => setPage(targetPage)} // Handles 'room-builder', 'catalog', 'quiz', 'cart-checkout', etc.
+        onNavigate={(targetPage) => setPage(targetPage)}
         onLogout={handleLogout}
       />
     )
@@ -65,7 +76,11 @@ export default function App() {
         onQuiz={() => setPage("quiz")}
         onRoomBuilder={() => setPage("room-builder")}
         onLogout={handleLogout}
-        onBack={() => setPage("dashboard")} // Allows navigating back to studio dashboard
+        onBack={() => setPage("dashboard")}
+        // ── NEW: wire checkout → payment ──
+        // ProductCatalog already calls onCheckout?.(cart) from CartDrawer.
+        // We pass handleGoToPayment so clicking "Proceed to checkout" navigates here.
+        onCheckout={handleGoToPayment}
       />
     )
 
@@ -73,11 +88,10 @@ export default function App() {
     return (
       <DesignQuiz
         user={user}
-        onBack={() => setPage("dashboard")} // Takes them back to dashboard
+        onBack={() => setPage("dashboard")}
       />
     )
 
-// 2. CHANGE: Kept your Designers page perfectly!
   if (page === "designers")
     return (
       <DesignersPage
@@ -86,45 +100,52 @@ export default function App() {
       />
     )
 
-  // Kept your friend's RoomBuilder page!
   if (page === "room-builder")
     return (
       <RoomBuilder
         user={user}
-        onBack={() => setPage("dashboard")} 
+        onBack={() => setPage("dashboard")}
+        // ── NEW: wire RoomBuilder "Proceed to payment" → payment page ──
+        // RoomBuilder will call this after the room is added to cart.
+        // See RoomBuilder.jsx for how onProceedToPayment is called.
+        onProceedToPayment={handleGoToPayment}
       />
     )
 
-  // ─── PALETTE CHECKOUT & CART FLOW ─────────────────────────────────────────
+  // ── NEW: Payment page ──
+  // Receives user + pendingCart. onBack clears the cart and goes to dashboard.
+  if (page === "payment")
+    return (
+      <PaymentPage
+        user={user}
+        cart={pendingCart}
+        onBack={() => {
+          setPendingCart(null)
+          setPage("dashboard")
+        }}
+      />
+    )
 
-  // Kept your friend's Cart Checkout page!
+  // ─── CART CHECKOUT FLOW (existing, unchanged) ─────────────────────────────
   if (page === "cart-checkout")
     return (
-      <CartCheckoutFlow 
-        onBack={() => setPage("dashboard")} 
+      <CartCheckoutFlow
+        onBack={() => setPage("dashboard")}
       />
     )
 
   // ─── LANDING PAGE ─────────────────────────────────────────────────────────
-
-  // Kept your friend's upgraded landing page features!
   return (
     <LandingPage
       onLogin={() => setPage("login")}
       onRegister={() => setPage("register")}
       onQuiz={() => {
-        if (user) {
-          setPage("quiz")
-        } else {
-          setPage("login")
-        }
+        if (user) setPage("quiz")
+        else setPage("login")
       }}
       onRoomBuilder={() => {
-        if (user) {
-          setPage("room-builder")
-        } else {
-          setPage("login")
-        }
+        if (user) setPage("room-builder")
+        else setPage("login")
       }}
     />
   )
