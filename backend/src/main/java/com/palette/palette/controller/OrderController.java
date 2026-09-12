@@ -68,6 +68,21 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // ── Get Orders by User ID (query param mapping) ─────────────────────────────
+
+    /**
+     * GET /api/order?userId=1
+     *
+     * Retrieves all orders for a user via query parameter.
+     */
+    @GetMapping
+    public ResponseEntity<List<OrderResponseDTO>> getOrdersByUserId(
+            @RequestParam Long userId) {
+
+        List<OrderResponseDTO> responses = orderService.getUserOrders(userId);
+        return ResponseEntity.ok(responses);
+    }
+
     // ── Get Order by ID (with user validation) ──────────────────────────────────
 
     /**

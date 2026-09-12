@@ -61,7 +61,7 @@ public class OrderService {
                         "User not found with id: " + dto.getUserId()));
 
         // Validate cart exists → 404
-        Cart cart = cartRepository.findById(dto.getCartId())
+        Cart cart = cartRepository.findByIdForUpdate(dto.getCartId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Cart not found with id: " + dto.getCartId()));
 

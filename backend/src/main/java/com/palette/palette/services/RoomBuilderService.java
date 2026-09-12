@@ -7,6 +7,7 @@ import com.palette.palette.entities.User;
 import com.palette.palette.exceptions.ResourceNotFoundException;
 import com.palette.palette.patterns.builder.RoomBuilder;
 import com.palette.palette.repository.CustomRoomRepository;
+import com.palette.palette.repository.ProductRepository;
 import com.palette.palette.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,17 +38,21 @@ public class RoomBuilderService {
 
     private final CustomRoomRepository customRoomRepository;
     private final UserRepository userRepository;
+    private final ProductRepository productRepository;
 
     /**
      * Constructs a {@code RoomBuilderService} with its required dependencies.
      *
      * @param customRoomRepository the repository for {@link CustomRoom} persistence
      * @param userRepository       the repository used to validate user existence
+     * @param productRepository    the repository to fetch product prices
      */
     public RoomBuilderService(CustomRoomRepository customRoomRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              ProductRepository productRepository) {
         this.customRoomRepository = customRoomRepository;
         this.userRepository = userRepository;
+        this.productRepository = productRepository;
     }
 
     // -------------------------------------------------------------------------
@@ -88,12 +93,46 @@ public class RoomBuilderService {
             builder.setFlooring(flooring);
         }
 
-        // Step 3: Add furniture items
+        // Step 3: Optionally apply wallpaper
+        String wallpaper = dto.getWallpaper();
+        if (wallpaper != null && !wallpaper.isBlank()) {
+            builder.setWallpaper(wallpaper);
+        }
+
+        // Step 4: Add furniture items
         if (dto.getFurnitureItems() != null) {
             for (String item : dto.getFurnitureItems()) {
                 builder.addFurniture(item);
             }
         }
+
+        // Calculate Pricing using ProductRepository
+        double area = dto.getWidth() * dto.getLength();
+        double flooringPrice = 0.0;
+        if (flooring != null && !flooring.isBlank()) {
+            flooringPrice = productRepository.findByName(flooring)
+                    .map(p -> p.getPriceInPKR() * area)
+                    .orElse(0.0);
+        }
+
+        double wallpaperPrice = 0.0;
+        if (wallpaper != null && !wallpaper.isBlank()) {
+            wallpaperPrice = productRepository.findByName(wallpaper)
+                    .map(p -> p.getPriceInPKR() * area)
+                    .orElse(0.0);
+        }
+
+        double furniturePrice = 0.0;
+        if (dto.getFurnitureItems() != null) {
+            furniturePrice = dto.getFurnitureItems().stream()
+                    .mapToDouble(name -> productRepository.findByName(name)
+                            .map(com.palette.palette.entities.Product::getPriceInPKR)
+                            .orElse(0.0))
+                    .sum();
+        }
+
+        double finalPrice = flooringPrice + wallpaperPrice + furniturePrice;
+        builder.setTotalPrice(finalPrice);
 
         // Final: Build — validates constraints and calculates totalPrice
         CustomRoom room;
@@ -225,6 +264,7 @@ public class RoomBuilderService {
         dto.setWidth(room.getWidth());
         dto.setLength(room.getLength());
         dto.setFlooring(room.getFlooring());
+        dto.setWallpaper(room.getWallpaper());
         dto.setFurnitureItems(room.getFurnitureItems());
         dto.setTotalPrice(room.getTotalPrice());
         dto.setCreatedAt(room.getCreatedAt());

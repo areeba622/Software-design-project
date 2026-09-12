@@ -29,6 +29,8 @@ public class RoomBuilderRequestDTO {
     private Integer length;
 
     private String flooring;  // Optional: e.g., "Hardwood", "Tile"
+    
+    private String wallpaper; // Optional: e.g., "Floral", "Geometric"
 
     @NotEmpty(message = "At least one furniture item is required")
     private List<String> furnitureItems;  // e.g., ["Bed", "Wardrobe", "Nightstand"]
@@ -37,11 +39,12 @@ public class RoomBuilderRequestDTO {
     public RoomBuilderRequestDTO() {}
 
     public RoomBuilderRequestDTO(String roomType, Integer width, Integer length, 
-                                 String flooring, List<String> furnitureItems) {
+                                 String flooring, String wallpaper, List<String> furnitureItems) {
         this.roomType = roomType;
         this.width = width;
         this.length = length;
         this.flooring = flooring;
+        this.wallpaper = wallpaper;
         this.furnitureItems = furnitureItems;
     }
 
@@ -58,6 +61,9 @@ public class RoomBuilderRequestDTO {
     public String getFlooring() { return flooring; }
     public void setFlooring(String flooring) { this.flooring = flooring; }
 
+    public String getWallpaper() { return wallpaper; }
+    public void setWallpaper(String wallpaper) { this.wallpaper = wallpaper; }
+
     public List<String> getFurnitureItems() { return furnitureItems; }
     public void setFurnitureItems(List<String> furnitureItems) { this.furnitureItems = furnitureItems; }
 
@@ -67,6 +73,7 @@ public class RoomBuilderRequestDTO {
                 "roomType='" + roomType + '\'' +
                 ", dimensions=" + width + "x" + length +
                 ", flooring='" + flooring + '\'' +
+                ", wallpaper='" + wallpaper + '\'' +
                 ", furnitureCount=" + (furnitureItems != null ? furnitureItems.size() : 0) +
                 '}';
     }

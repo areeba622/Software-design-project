@@ -17,10 +17,11 @@ public class ProductDTO {
     private String aestheticStyle;
 
     // ── Constructors ──────────────────────────────────────────────────────────
-    public ProductDTO() {}
+    public ProductDTO() {
+    }
 
-    public ProductDTO(Long id, String name, Double priceInPKR, String category, 
-                      String roomType, String aestheticStyle) {
+    public ProductDTO(Long id, String name, Double priceInPKR, String category,
+            String roomType, String aestheticStyle) {
         this.id = id;
         this.name = name;
         this.priceInPKR = priceInPKR;
@@ -30,29 +31,69 @@ public class ProductDTO {
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getName() {
+        return name;
+    }
 
-    public Double getPriceInPKR() { return priceInPKR; }
-    public void setPriceInPKR(Double priceInPKR) { this.priceInPKR = priceInPKR; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public String getImageUrl() { return imageUrl; }
-    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getDescription() {
+        return description;
+    }
 
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public String getRoomType() { return roomType; }
-    public void setRoomType(String roomType) { this.roomType = roomType; }
+    public Double getPriceInPKR() {
+        return priceInPKR;
+    }
 
-    public String getAestheticStyle() { return aestheticStyle; }
-    public void setAestheticStyle(String aestheticStyle) { this.aestheticStyle = aestheticStyle; }
+    public void setPriceInPKR(Double priceInPKR) {
+        this.priceInPKR = priceInPKR;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getRoomType() {
+        return roomType;
+    }
+
+    public void setRoomType(String roomType) {
+        this.roomType = roomType;
+    }
+
+    public String getAestheticStyle() {
+        return aestheticStyle;
+    }
+
+    public void setAestheticStyle(String aestheticStyle) {
+        this.aestheticStyle = aestheticStyle;
+    }
 
     @Override
     public String toString() {

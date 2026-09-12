@@ -1,22 +1,22 @@
 // src/pages/PaymentPage.jsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiLoader } from 'react-icons/fi'
+import { OrderSuccessCard } from '../components/OrderSuccessCard'
+import { API_ENDPOINTS } from '../config/api'
 
-// ─── Design Tokens (matching existing codebase) ───────────────────────────────
+// ─── Design Tokens ────────────────────────────────────────────────────────────
 const T = {
-  ink:   "#0F172A",
-  clay:  "#C2410C",
+  ink: "#0F172A",
+  clay: "#C2410C",
   stone: "#78716C",
   linen: "#FAFAF9",
-  warm:  "#E7DDD5",
+  warm: "#E7DDD5",
   white: "#FFFFFF",
 }
-
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-
-const BASE = "http://localhost:8081"
 
 // ─── NULL OBJECT PATTERN ──────────────────────────────────────────────────────
 // Instead of leaving paymentResult as null on failure (which forces null checks
@@ -24,21 +24,21 @@ const BASE = "http://localhost:8081"
 // NullPaymentResult. The result screen renders identically in both cases —
 // it only branches once on result.isNull / result.status for green vs red styling.
 const NullPaymentResult = {
-  status:       "FAILED",
+  status: "FAILED",
   transactionId: "—",
-  gateway:      "—",
-  amountInPKR:  0,
-  amountInUSD:  null,
-  message:      "Payment could not be processed. Please try again.",
-  isNull:       true,   // ← the single flag the UI checks
+  gateway: "—",
+  amountInPKR: 0,
+  amountInUSD: null,
+  message: "Payment could not be processed. Please try again.",
+  isNull: true,   // ← the single flag the UI checks
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Framer Motion Variants ───────────────────────────────────────────────────
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
-  show:   { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
-  exit:   { opacity: 0, y: -12, transition: { duration: 0.2 } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+  exit: { opacity: 0, y: -12, transition: { duration: 0.2 } },
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ function GatewayCard({ id, name, desc, icon, badge, selected, onClick }) {
         padding: '2px 10px',
         borderRadius: 999,
         background: id === 'STRIPE' ? '#EFF6FF' : '#F0FDF4',
-        color:      id === 'STRIPE' ? '#1D4ED8' : '#15803D',
+        color: id === 'STRIPE' ? '#1D4ED8' : '#15803D',
         fontFamily: FONT, fontSize: 10, fontWeight: 700,
         letterSpacing: '0.08em', textTransform: 'uppercase',
       }}>{badge}</span>
@@ -127,12 +127,14 @@ function ResultRow({ label, value, highlight }) {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function PaymentPage({ user, cart, onBack }) {
+  const navigate = useNavigate()
+  const orderCreationStarted = useRef(false)
 
   // ── Screens: 'creating-order' | 'select-gateway' | 'processing' | 'result'
-  const [screen, setScreen]           = useState('creating-order')
-  const [order, setOrder]             = useState(null)
+  const [screen, setScreen] = useState('creating-order')
+  const [order, setOrder] = useState(null)
   const [selectedGateway, setGateway] = useState(null)
-  const [orderError, setOrderError]   = useState(null)
+  const [orderError, setOrderError] = useState(null)
 
   // paymentResult is ALWAYS either a real API response OR NullPaymentResult
   // — it is NEVER null after the payment call resolves (Null Object Pattern)
@@ -140,12 +142,27 @@ export default function PaymentPage({ user, cart, onBack }) {
 
   // ── Step 1: Create order on mount ────────────────────────────────────────
   useEffect(() => {
+    if (orderCreationStarted.current) return
+    orderCreationStarted.current = true
+
     const createOrder = async () => {
       try {
-        const res = await fetch(`${BASE}/api/order/create`, {
+        // Fallback: if cart.cartId is missing (e.g. RoomBuilder passed a raw room object),
+        // fetch the latest cart for this user to obtain a valid cartId before creating the order.
+        let cartId = cart?.cartId
+        if (!cartId && user?.userId) {
+          const cartRes = await fetch(API_ENDPOINTS.CART(user.userId))
+          if (cartRes.ok) {
+            const freshCart = await cartRes.json()
+            cartId = freshCart?.cartId
+          }
+        }
+        if (!cartId) throw new Error('No cart found — please add items to your cart before checking out.')
+
+        const res = await fetch(API_ENDPOINTS.ORDER_CREATE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.userId, cartId: cart.cartId }),
+          body: JSON.stringify({ userId: user.userId, cartId }),
         })
         if (!res.ok) {
           const errText = await res.text()
@@ -168,13 +185,13 @@ export default function PaymentPage({ user, cart, onBack }) {
     setScreen('processing')
 
     try {
-      const res = await fetch(`${BASE}/api/payment/process`, {
+      const res = await fetch(API_ENDPOINTS.PAYMENT_PROCESS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId:      order.orderId,
-          gatewayType:  selectedGateway,
-          amountInPKR:  order.grandTotal,
+          orderId: order.orderId,
+          gatewayType: selectedGateway,
+          amountInPKR: order.grandTotal,
         }),
       })
 
@@ -239,8 +256,8 @@ export default function PaymentPage({ user, cart, onBack }) {
           }}>
             {screen === 'creating-order' && 'Preparing your order…'}
             {screen === 'select-gateway' && 'Choose Payment Method'}
-            {screen === 'processing'     && 'Processing Payment…'}
-            {screen === 'result'         && (paymentResult?.status === 'SUCCESS' ? 'Payment Confirmed' : 'Payment Failed')}
+            {screen === 'processing' && 'Processing Payment…'}
+            {screen === 'result' && (paymentResult?.status === 'SUCCESS' ? 'Payment Confirmed' : 'Payment Failed')}
           </h1>
           {screen === 'select-gateway' && order && (
             <p style={{ fontFamily: FONT, fontSize: 12, color: T.stone, margin: '4px 0 0' }}>
@@ -255,9 +272,9 @@ export default function PaymentPage({ user, cart, onBack }) {
         <motion.div
           animate={{
             width:
-              screen === 'creating-order' ? '25%'  :
-              screen === 'select-gateway' ? '50%'  :
-              screen === 'processing'     ? '75%'  : '100%',
+              screen === 'creating-order' ? '25%' :
+                screen === 'select-gateway' ? '50%' :
+                  screen === 'processing' ? '75%' : '100%',
           }}
           transition={{ duration: 0.4 }}
           style={{ height: '100%', background: T.clay }}
@@ -316,36 +333,94 @@ export default function PaymentPage({ user, cart, onBack }) {
               {/* Order summary card */}
               {order && (
                 <div style={{
-                  padding: '16px 20px', marginBottom: 28,
+                  marginBottom: 28,
                   border: `1.5px solid ${T.warm}`, borderRadius: 14,
-                  background: T.white,
+                  background: T.white, overflow: 'hidden',
                 }}>
-                  <p style={{
-                    fontFamily: FONT, fontSize: 10, fontWeight: 700,
-                    letterSpacing: '0.12em', color: T.clay,
-                    textTransform: 'uppercase', margin: '0 0 12px',
-                  }}>Order Summary</p>
-                  {order.items?.map((item, i) => (
-                    <div key={i} style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      padding: '6px 0', borderBottom: `1px solid ${T.warm}`,
-                      fontFamily: FONT, fontSize: 13,
-                    }}>
-                      <span style={{ color: T.stone }}>
-                        {item.itemName} × {item.quantity}
-                      </span>
-                      <span style={{ color: T.ink, fontWeight: 600 }}>
-                        {fmtPKR(item.lineTotal)}
-                      </span>
-                    </div>
-                  ))}
+                  {/* Card header */}
                   <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    paddingTop: 12, fontFamily: FONT,
-                    fontSize: 15, fontWeight: 800, color: T.ink,
+                    padding: '14px 20px',
+                    borderBottom: `1px solid ${T.warm}`,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   }}>
-                    <span>Total</span>
-                    <span style={{ color: T.clay }}>{fmtPKR(order.grandTotal)}</span>
+                    <p style={{
+                      fontFamily: FONT, fontSize: 10, fontWeight: 700,
+                      letterSpacing: '0.12em', color: T.clay,
+                      textTransform: 'uppercase', margin: 0,
+                    }}>Order Summary</p>
+                    <span style={{
+                      fontFamily: FONT, fontSize: 11, color: T.stone, fontWeight: 600,
+                    }}>
+                      {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {/* Items list */}
+                  <div style={{ padding: '8px 0' }}>
+                    {(!order.items || order.items.length === 0) && (
+                      <p style={{
+                        fontFamily: FONT, fontSize: 13, color: T.stone,
+                        textAlign: 'center', padding: '20px 0', margin: 0,
+                      }}>No items in this order.</p>
+                    )}
+                    {order.items?.map((item, i) => {
+                      // Colour-coded badge per item type
+                      const typeMeta = {
+                        PRODUCT:       { bg: '#EFF6FF', color: '#1D4ED8', label: 'Product' },
+                        CUSTOM_ROOM:   { bg: '#FFF7ED', color: '#C2410C', label: 'Custom Room' },
+                        BUNDLE:        { bg: '#F0FDF4', color: '#15803D', label: 'Bundle' },
+                        DESIGNER_HIRE: { bg: '#FDF4FF', color: '#7E22CE', label: 'Designer' },
+                      }
+                      const meta = typeMeta[item.itemType] || { bg: '#F1F5F9', color: '#475569', label: item.itemType || 'Item' }
+                      const isLast = i === order.items.length - 1
+
+                      return (
+                        <div key={i} style={{
+                          padding: '12px 20px',
+                          borderBottom: isLast ? 'none' : `1px solid ${T.warm}`,
+                          display: 'flex', flexDirection: 'column', gap: 6,
+                        }}>
+                          {/* Row 1: badge + name */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{
+                              display: 'inline-block', padding: '2px 8px', borderRadius: 999,
+                              background: meta.bg, color: meta.color,
+                              fontFamily: FONT, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                              textTransform: 'uppercase', flexShrink: 0,
+                            }}>{meta.label}</span>
+                            <span style={{
+                              fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.ink,
+                            }}>{item.itemName || '—'}</span>
+                          </div>
+
+                          {/* Row 2: qty × unit price = line total */}
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          }}>
+                            <span style={{ fontFamily: FONT, fontSize: 12, color: T.stone }}>
+                              {fmtPKR(item.unitPrice)} × {item.quantity ?? 1}
+                            </span>
+                            <span style={{
+                              fontFamily: FONT, fontSize: 13, fontWeight: 700, color: T.ink,
+                            }}>
+                              {fmtPKR(item.lineTotal)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Grand Total footer */}
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '14px 20px',
+                    borderTop: `1.5px solid ${T.warm}`,
+                    background: '#FAFAF9',
+                    fontFamily: FONT,
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.stone, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</span>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: T.clay }}>{fmtPKR(order.grandTotal)}</span>
                   </div>
                 </div>
               )}
@@ -485,10 +560,10 @@ export default function PaymentPage({ user, cart, onBack }) {
                 background: T.white, padding: '4px 20px',
                 marginBottom: 24,
               }}>
-                <ResultRow label="Order ID"       value={`#${paymentResult.orderId ?? '—'}`} />
+                <ResultRow label="Order ID" value={`#${paymentResult.orderId ?? '—'}`} />
                 <ResultRow label="Transaction ID" value={paymentResult.transactionId} />
-                <ResultRow label="Gateway"        value={paymentResult.gateway} />
-                <ResultRow label="Amount (PKR)"   value={fmtPKR(paymentResult.amountInPKR)} highlight />
+                <ResultRow label="Gateway" value={paymentResult.gateway} />
+                <ResultRow label="Amount (PKR)" value={fmtPKR(paymentResult.amountInPKR)} highlight />
                 {paymentResult.amountInUSD != null && (
                   <ResultRow label="Amount (USD)" value={`$${Number(paymentResult.amountInUSD).toFixed(2)}`} />
                 )}
@@ -501,19 +576,10 @@ export default function PaymentPage({ user, cart, onBack }) {
 
               {/* Action buttons */}
               {paymentResult.status === 'SUCCESS' ? (
-                <motion.button
-                  onClick={onBack}
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                  style={{
-                    width: '100%', padding: '13px 0',
-                    background: T.ink, color: T.white,
-                    border: 'none', borderRadius: 10,
-                    fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Back to Shop
-                </motion.button>
+                <OrderSuccessCard
+                  onTrackPackage={onBack}
+                  onViewHistory={() => navigate('/orders')}
+                />
               ) : (
                 <div style={{ display: 'flex', gap: 12 }}>
                   <motion.button

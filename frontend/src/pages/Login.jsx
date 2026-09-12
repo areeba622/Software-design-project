@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowLeft } from "react-icons/fi"
+import { API_ENDPOINTS } from "../config/api"
 
 export default function Login({ onSwitch, onBack, onSuccess }) {
   const [form, setForm] = useState({ email: "", password: "" })
@@ -11,12 +12,12 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
   const handle = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const submit = async (e) => {
-    if (e) e.preventDefault() // Safely intercept any default actions
+    if (e) e.preventDefault()
     setLoading(true)
     setMsg(null)
     
     try {
-      const res = await fetch("http://localhost:8081/api/auth/login", {
+      const res = await fetch(API_ENDPOINTS.LOGIN, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -26,7 +27,6 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
       
       if (!res.ok) throw new Error(data.message || "Login failed")
       
-      // Pass user payload directly to handleAuth inside App.jsx
       if (onSuccess) {
         onSuccess(data)
       }
@@ -77,7 +77,7 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
         <p style={{ fontSize: 14, color: "#78716C", margin: "0 0 28px" }}>Enter your credentials to access your studio.</p>
 
         {/* Form Element Container */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {[
             { label: "Email address", name: "email", type: "email", placeholder: "you@studio.com", Icon: FiMail, auto: "username" },
             { label: "Password", name: "password", type: "password", placeholder: "Your password", Icon: FiLock, auto: "current-password" },
@@ -122,8 +122,7 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
           )}
 
           <motion.button 
-            type="button" 
-            onClick={submit}
+            type="submit" 
             disabled={loading} 
             whileHover={{ scale: 1.01, boxShadow: "0 16px 32px -8px rgba(15,23,42,0.2)" }} 
             whileTap={{ scale: 0.98 }}
@@ -131,7 +130,7 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
           >
             {loading ? "Signing in…" : "Sign in to Palette"}
           </motion.button>
-        </div>
+        </form>
 
         <p style={{ textAlign: "center", fontSize: 13, color: "#78716C", marginTop: 24 }}>
           Don't have an account?{" "}

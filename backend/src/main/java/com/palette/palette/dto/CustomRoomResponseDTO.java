@@ -18,6 +18,7 @@ public class CustomRoomResponseDTO {
     private Integer width;
     private Integer length;
     private String flooring;
+    private String wallpaper;
     private List<String> furnitureItems;
     private Double totalPrice;
     private LocalDateTime createdAt;
@@ -26,13 +27,14 @@ public class CustomRoomResponseDTO {
     public CustomRoomResponseDTO() {}
 
     public CustomRoomResponseDTO(Long roomId, String roomType, Integer width, 
-                                Integer length, String flooring, 
+                                Integer length, String flooring, String wallpaper, 
                                 List<String> furnitureItems, Double totalPrice) {
         this.roomId = roomId;
         this.roomType = roomType;
         this.width = width;
         this.length = length;
         this.flooring = flooring;
+        this.wallpaper = wallpaper;
         this.furnitureItems = furnitureItems;
         this.totalPrice = totalPrice;
     }
@@ -55,6 +57,9 @@ public class CustomRoomResponseDTO {
 
     public String getFlooring() { return flooring; }
     public void setFlooring(String flooring) { this.flooring = flooring; }
+
+    public String getWallpaper() { return wallpaper; }
+    public void setWallpaper(String wallpaper) { this.wallpaper = wallpaper; }
 
     public List<String> getFurnitureItems() { return furnitureItems; }
     public void setFurnitureItems(List<String> furnitureItems) { this.furnitureItems = furnitureItems; }

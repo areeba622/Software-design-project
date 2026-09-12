@@ -1,12 +1,16 @@
 package com.palette.palette.patterns.factory;
+
 import com.palette.palette.patterns.nullobject.NoStyleBundle;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * FACTORY PATTERN: AestheticBundleFactory
- * * Styles: BOHEMIAN, SCANDINAVIAN, MINIMALIST
- * Includes Null Object Pattern fallback via NoStyleBundle inside the default block.
+ * Styles: BOHEMIAN, SCANDINAVIAN, MINIMALIST
+ * Includes Null Object Pattern fallback via NoStyleBundle inside the default
+ * block.
+ * 
+ * ✅ Product IDs updated to match actual DB seed data.
  */
 public class AestheticBundleFactory {
 
@@ -18,10 +22,10 @@ public class AestheticBundleFactory {
      * Main Factory Method
      */
     public static StyleBundle createBundle(String style, String roomType) {
-        
+
         // Safety Gate: Bypasses runtime crashes if raw API requests send empty payloads
         if (style == null || style.isBlank() || roomType == null || roomType.isBlank()) {
-            return new NoStyleBundle(); 
+            return new NoStyleBundle();
         }
 
         String normalizedStyle = style.toUpperCase();
@@ -36,8 +40,6 @@ public class AestheticBundleFactory {
                 return buildMinimalistBundle(normalizedRoom);
             default:
                 // NULL OBJECT FALLBACK
-                // Agar standard workflow ke bahar ka koi unmapped input aata hai, 
-                // toh exception throw karne ke bajaye safely safe wrapper return hoga.
                 return new NoStyleBundle();
         }
     }
@@ -47,38 +49,37 @@ public class AestheticBundleFactory {
     private static StyleBundle buildBohemianBundle(String roomType) {
         StyleBundle bundle = new StyleBundle();
         bundle.setStyleName("BOHEMIAN");
-        bundle.setStyleDescription("Free-spirited, eclectic, artistic, nature-inspired with vibrant colors and mixed textures");
+        bundle.setStyleDescription(
+                "Free-spirited, eclectic, artistic, nature-inspired with vibrant colors and mixed textures");
         bundle.setRoomType(roomType);
-        bundle.setDiscountFactor(0.95);  // 5% off bundle deal
+        bundle.setDiscountFactor(0.95); // 5% off bundle deal
 
         switch (roomType) {
             case "BEDROOM":
-                bundle.addRecommendedProductId(1L);   // Macramé Bed Frame
-                bundle.addRecommendedProductId(5L);   // Tapestry Wall Art
-                bundle.addRecommendedProductId(8L);   // Rattan Chair
-                bundle.addRecommendedProductId(12L);  // Jute Rug
+                bundle.addRecommendedProductId(90L); // Boho Rattan Canopy Bed
+                bundle.addRecommendedProductId(91L); // Earthy Macrame Accent Bed
+                bundle.addRecommendedProductId(97L); // Woven Macrame Swing Chair
+                bundle.addRecommendedProductId(99L); // Macrame Tiered Tassel Lamp
+                bundle.addRecommendedProductId(83L); // Rattan Detail Boho Wardrobe
+                bundle.addRecommendedProductId(116L); // Abstract Geometric Boho Wallpaper
                 break;
             case "LIVING_ROOM":
-                bundle.addRecommendedProductId(2L);   // Bohemian Sofa
-                bundle.addRecommendedProductId(6L);   // Hanging Plants
-                bundle.addRecommendedProductId(9L);   // Low Wooden Table
-                bundle.addRecommendedProductId(13L);  // Colorful Pillow Set
+                bundle.addRecommendedProductId(106L); // Boho Chic Rattan Sofa
+                bundle.addRecommendedProductId(96L); // Boho Rattan Accent Chair
+                bundle.addRecommendedProductId(94L); // Boho Chic Round Coffee Table
+                bundle.addRecommendedProductId(98L); // Boho Basket Pendant Light
+                bundle.addRecommendedProductId(101L); // Boho Crimson Medallion Rug
+                bundle.addRecommendedProductId(115L); // Boho Botanical Leaves Wallpaper
                 break;
             case "KITCHEN":
-                bundle.addRecommendedProductId(3L);   // Wooden Table
-                bundle.addRecommendedProductId(7L);   // Ceramic Plates
-                bundle.addRecommendedProductId(10L);  // Woven Baskets
-                bundle.addRecommendedProductId(14L);  // Bohemian Lighting
+                bundle.addRecommendedProductId(120L); // Boho Woven Rattan Kitchen Basket
+                bundle.addRecommendedProductId(121L); // Rustic Boho Kitchen Table
+                bundle.addRecommendedProductId(122L); // Boho Seagrass Kitchen Pendant Lamp
                 break;
             case "DINING_ROOM":
-                bundle.addRecommendedProductId(15L);  // Bohemian Dining Table
-                bundle.addRecommendedProductId(16L);  // Mixed Wood Chairs
-                bundle.addRecommendedProductId(17L);  // Eclectic Decor
-                bundle.addRecommendedProductId(18L);  // Patterned Tablecloth
+                bundle.addRecommendedProductId(95L); // Rustic Organic Dining Table
                 break;
             default:
-                // Edge Case Safety: Agar kisi ne unexpected room type choose kiya tab bhi 
-                // khali bundle context safely pass ho jaye.
                 return new NoStyleBundle();
         }
 
@@ -90,34 +91,40 @@ public class AestheticBundleFactory {
     private static StyleBundle buildScandinavianBundle(String roomType) {
         StyleBundle bundle = new StyleBundle();
         bundle.setStyleName("SCANDINAVIAN");
-        bundle.setStyleDescription("Light, airy, functional design with natural materials, cozy warmth, and minimalist sophistication");
+        bundle.setStyleDescription(
+                "Light, airy, functional design with natural materials, cozy warmth, and minimalist sophistication");
         bundle.setRoomType(roomType);
-        bundle.setDiscountFactor(0.92);  // 8% off bundle deal
+        bundle.setDiscountFactor(0.92); // 8% off bundle deal
 
         switch (roomType) {
             case "BEDROOM":
-                bundle.addRecommendedProductId(19L);  // Light Wood Bed
-                bundle.addRecommendedProductId(20L);  // Soft Wool Blanket
-                bundle.addRecommendedProductId(21L);  // Natural Lighting Fixture
-                bundle.addRecommendedProductId(22L);  // Light Neutral Rug
+                bundle.addRecommendedProductId(31L); // Nordic Light Oak Bed
+                bundle.addRecommendedProductId(32L); // Scandi Minimalist Bed
+                bundle.addRecommendedProductId(56L); // Scandi Spherical Paper Lantern
+                bundle.addRecommendedProductId(58L); // Nordic Bedside Ceramic Lamp
+                bundle.addRecommendedProductId(65L); // Copenhagen Light Oak Wardrobe
+                bundle.addRecommendedProductId(66L); // Nordic Slatted Wooden Wardrobe
                 break;
             case "LIVING_ROOM":
-                bundle.addRecommendedProductId(23L);  // Scandinavian Sofa
-                bundle.addRecommendedProductId(24L);  // Light Wood Coffee Table
-                bundle.addRecommendedProductId(25L);  // Cozy Blanket
-                bundle.addRecommendedProductId(26L);  // Minimalist Shelves
+                bundle.addRecommendedProductId(47L); // Nordic Accent Lounge Chair
+                bundle.addRecommendedProductId(50L); // Scandi Minimalist Armchair
+                bundle.addRecommendedProductId(53L); // Minimalist Wooden Tripod Lamp
+                bundle.addRecommendedProductId(57L); // Copenhagen Arching Floor Lamp
+                bundle.addRecommendedProductId(60L); // Nordic Geometric Wool Rug
+                bundle.addRecommendedProductId(41L); // Nordic Glass Display Tray
                 break;
             case "KITCHEN":
-                bundle.addRecommendedProductId(27L);  // Light Oak Table
-                bundle.addRecommendedProductId(28L);  // Natural Wood Chairs
-                bundle.addRecommendedProductId(29L);  // Scandinavian Lighting
-                bundle.addRecommendedProductId(30L);  // Functional Storage
+                bundle.addRecommendedProductId(42L); // Scandi Wooden Spoon Set
+                bundle.addRecommendedProductId(43L); // Nordic Wooden Salad Bowl
+                bundle.addRecommendedProductId(45L); // Matte Stoneware Coffee Mug Set
+                bundle.addRecommendedProductId(46L); // Minimalist Ash Wood Serving Tray
+                bundle.addRecommendedProductId(52L); // Hygge Counter Stool
+                bundle.addRecommendedProductId(59L); // Lumi Geometric Wooden Pendant
                 break;
             case "DINING_ROOM":
-                bundle.addRecommendedProductId(31L);  // Light Wood Dining Table
-                bundle.addRecommendedProductId(32L);  // Minimalist Dining Chairs
-                bundle.addRecommendedProductId(33L);  // Neutral Centerpiece
-                bundle.addRecommendedProductId(34L);  // Natural Lighting
+                bundle.addRecommendedProductId(48L); // Copenhagen Dining Chair
+                bundle.addRecommendedProductId(51L); // Stockholm Spindle Chair
+                bundle.addRecommendedProductId(54L); // Nordic Pleated Pendant Light
                 break;
             default:
                 return new NoStyleBundle();
@@ -133,32 +140,38 @@ public class AestheticBundleFactory {
         bundle.setStyleName("MINIMALIST");
         bundle.setStyleDescription("Clean lines, essential design, uncluttered spaces with focus on function and form");
         bundle.setRoomType(roomType);
-        bundle.setDiscountFactor(1.0);  // No discount for minimalist
+        bundle.setDiscountFactor(1.0); // No discount for minimalist
 
         switch (roomType) {
             case "BEDROOM":
-                bundle.addRecommendedProductId(35L);  // Platform Bed
-                bundle.addRecommendedProductId(36L);  // Simple Nightstand
-                bundle.addRecommendedProductId(37L);  // Minimalist Lamp
-                bundle.addRecommendedProductId(38L);  // Solid Color Rug
+                bundle.addRecommendedProductId(1L); // Minimalist Platform Bed
+                bundle.addRecommendedProductId(2L); // Sleek Oak Bed Frame
+                bundle.addRecommendedProductId(4L); // Nordic Fabric Bed
+                bundle.addRecommendedProductId(7L); // 3-Tier Geometric Wall Shelf
+                bundle.addRecommendedProductId(10L); // Sleek Hexagon Wall Shelf Set
+                bundle.addRecommendedProductId(24L); // Modern Cozy Armchair
                 break;
             case "LIVING_ROOM":
-                bundle.addRecommendedProductId(39L);  // Sleek Sofa
-                bundle.addRecommendedProductId(40L);  // Glass Coffee Table
-                bundle.addRecommendedProductId(41L);  // LED Lighting
-                bundle.addRecommendedProductId(42L);  // Minimalist Shelves
+                bundle.addRecommendedProductId(29L); // Sleek 3-Seater Minimalist Sofa
+                bundle.addRecommendedProductId(20L); // Minimalist Lounge Chair
+                bundle.addRecommendedProductId(23L); // Minimalist Patio Chair
+                bundle.addRecommendedProductId(26L); // Elegant Corner Chair
+                bundle.addRecommendedProductId(6L); // Minimalist Floating Shelf
+                bundle.addRecommendedProductId(9L); // Corner Display Shelf
                 break;
             case "KITCHEN":
-                bundle.addRecommendedProductId(43L);  // Stainless Steel Table
-                bundle.addRecommendedProductId(44L);  // Modern Chairs
-                bundle.addRecommendedProductId(45L);  // Minimalist Decor
-                bundle.addRecommendedProductId(46L);  // Smart Storage
+                bundle.addRecommendedProductId(11L); // Minimalist Kitchen Cabinet Set
+                bundle.addRecommendedProductId(12L); // Sleek Kitchen Island Table
+                bundle.addRecommendedProductId(13L); // Modern Counter Stool
+                bundle.addRecommendedProductId(14L); // Minimalist Pendant Kitchen Lamp
+                bundle.addRecommendedProductId(15L); // Compact 2-Tier Spice Rack
+                bundle.addRecommendedProductId(25L); // Minimalist Bar Stool
                 break;
             case "DINING_ROOM":
-                bundle.addRecommendedProductId(47L);  // Minimalist Dining Table
-                bundle.addRecommendedProductId(48L);  // Simple Dining Chairs
-                bundle.addRecommendedProductId(49L);  // Clean Lighting
-                bundle.addRecommendedProductId(50L);  // Minimalist Centerpiece
+                bundle.addRecommendedProductId(22L); // Nordic Dining Chair
+                bundle.addRecommendedProductId(16L); // Nordic Dining Table Set
+                bundle.addRecommendedProductId(17L); // Matte Ceramic Dinnerware Set
+                bundle.addRecommendedProductId(18L); // Minimalist Floating Mug Rack
                 break;
             default:
                 return new NoStyleBundle();

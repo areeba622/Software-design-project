@@ -15,8 +15,12 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
     // Check if a specific item already exists in the cart (avoid duplicates)
     Optional<CartItem> findByCartIdAndProductId(Long cartId, Long productId);
+
     Optional<CartItem> findByCartIdAndBundleId(Long cartId, Long bundleId);
 
+    Optional<CartItem> findByCartIdAndCustomRoomId(Long cartId, Long customRoomId);
+
     // Wipe all items when cart is cleared post-checkout
+
     void deleteByCartId(Long cartId);
 }

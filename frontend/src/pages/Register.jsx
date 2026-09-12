@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { FiMail, FiLock, FiUser, FiEye, FiEyeOff } from "react-icons/fi"
+import { API_ENDPOINTS } from "../config/api"
 
-export default function Register({ onSwitch }) {
+export default function Register({ onSwitch, onBack, onSuccess }) {
   const [form, setForm] = useState({ fullName: "", email: "", password: "", currencyPreference: "PKR" })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -15,7 +16,7 @@ export default function Register({ onSwitch }) {
     setLoading(true)
     setMsg(null)
     try {
-      const res = await fetch("http://localhost:8081/api/auth/register", {
+      const res = await fetch(API_ENDPOINTS.REGISTER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -23,6 +24,9 @@ export default function Register({ onSwitch }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || "Registration failed")
       setMsg({ ok: true, text: `Account created! Welcome, ${data.fullName}.` })
+      if (onSuccess) {
+        setTimeout(() => onSuccess(data), 800)
+      }
     } catch (err) {
       setMsg({ ok: false, text: err.message })
     } finally {

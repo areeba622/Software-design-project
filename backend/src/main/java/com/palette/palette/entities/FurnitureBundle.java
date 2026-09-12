@@ -56,7 +56,8 @@ public class FurnitureBundle implements InventoryItem {
     }
 
     // ── Constructors ──────────────────────────────────────────────────────────
-    public FurnitureBundle() {}
+    public FurnitureBundle() {
+    }
 
     public FurnitureBundle(String name, RoomType roomType, AestheticStyle style) {
         this.name = name;
@@ -64,12 +65,16 @@ public class FurnitureBundle implements InventoryItem {
         this.style = style;
     }
 
-    // ── InventoryItem contract (Composite node) ──────────────────────────────
+    // InventoryItem contract Composite
     @Override
-    public Long getId() { return id; }
+    public Long getId() {
+        return id;
+    }
 
     @Override
-    public String getName() { return name; }
+    public String getName() {
+        return name;
+    }
 
     @Override
     public double getPrice() {
@@ -84,33 +89,69 @@ public class FurnitureBundle implements InventoryItem {
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────
-    public void setId(Long id) { this.id = id; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getDescription() {
+        return description;
+    }
 
-    public RoomType getRoomType() { return roomType; }
-    public void setRoomType(RoomType roomType) { this.roomType = roomType; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public AestheticStyle getStyle() { return style; }
-    public void setStyle(AestheticStyle style) { this.style = style; }
+    public RoomType getRoomType() {
+        return roomType;
+    }
 
-    public List<Product> getProducts() { return products; }
-    public void setProducts(List<Product> products) { this.products = products; }
+    public void setRoomType(RoomType roomType) {
+        this.roomType = roomType;
+    }
 
-    public Double getDiscountFactor() { return discountFactor; }
-    public void setDiscountFactor(Double discountFactor) { this.discountFactor = discountFactor; }
+    public AestheticStyle getStyle() {
+        return style;
+    }
 
-    public Double getTotalPriceInPKR() { return totalPriceInPKR; }
-    public void setTotalPriceInPKR(Double totalPriceInPKR) { this.totalPriceInPKR = totalPriceInPKR; }
+    public void setStyle(AestheticStyle style) {
+        this.style = style;
+    }
+
+    public List<Product> getProducts() {
+        return products;
+    }
+
+    public void setProducts(List<Product> products) {
+        this.products = products;
+    }
+
+    public Double getDiscountFactor() {
+        return discountFactor;
+    }
+
+    public void setDiscountFactor(Double discountFactor) {
+        this.discountFactor = discountFactor;
+    }
+
+    public Double getTotalPriceInPKR() {
+        return totalPriceInPKR;
+    }
+
+    public void setTotalPriceInPKR(Double totalPriceInPKR) {
+        this.totalPriceInPKR = totalPriceInPKR;
+    }
 
     // ── equals & hashCode ─────────────────────────────────────────────────────
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         FurnitureBundle that = (FurnitureBundle) o;
         return id != null && id.equals(that.id);
     }

@@ -1,6 +1,7 @@
 package com.palette.palette.services;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.palette.palette.dto.PaymentRequestDTO;
@@ -27,8 +28,8 @@ public class PaymentService {
 
     // Constructor injection
     public PaymentService(PaymentRepository paymentRepository,
-                          OrderRepository orderRepository,
-                          PaymentManager paymentManager) {
+            OrderRepository orderRepository,
+            PaymentManager paymentManager) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.paymentManager = paymentManager;
@@ -37,73 +38,96 @@ public class PaymentService {
     /**
      * Process a payment for an order.
      * Called from PaymentController.
-     * Flow:
-     *   1. Load Order from DB
-     *   2. Call PaymentManager.processOrder() (Singleton + Adapter)
-     *   3. Save Payment record
-     *   4. Update Order status to CONFIRMED
-     *   5. Return PaymentResponseDTO
+     *
+     * IMPORTANT: this method is intentionally NOT @Transactional anymore.
+     * The success path and the failure path each run in their OWN
+     * transaction (see processSuccessfulPayment / recordFailedPayment).
+     * Why: previously, everything ran in a single @Transactional method.
+     * When the gateway call or the success-save threw an exception,
+     * Spring marked that whole transaction "rollback-only". The catch
+     * block then tried to save a FAILED payment using the SAME
+     * transaction, which Spring silently rolled back too — that's why
+     * you were seeing blank/default values instead of either a real
+     * success OR a real recorded failure.
      */
-    @Transactional
     public PaymentResponseDTO processPayment(PaymentRequestDTO dto) {
 
-        // Step 1: Load the Order
+        // Step 1: Load the Order (read-only, no need for a write transaction yet)
         Order order = orderRepository.findById(dto.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Order not found with id: " + dto.getOrderId()));
 
-        // Step 2: Create Payment entity
-        Payment payment = new Payment(order, null, dto.getAmountInPKR());
-
-        // Step 3: Determine gateway from user's currency preference or DTO
+        // Step 2: Validate gateway type up front, before touching the DB
         String gatewayType = dto.getGatewayType().toUpperCase();
         validateGatewayType(gatewayType);
 
+        // Step 3: Create Payment entity (not yet saved)
+        Payment payment = new Payment(order, null, dto.getAmountInPKR());
+
         try {
-            // Step 4: Call Singleton PaymentManager
-            // PaymentManager internally selects Adapter (Stripe or JazzCash)
             System.out.println("PaymentService: Initiating payment via " + gatewayType);
 
-            String transactionId = paymentManager.processOrder(gatewayType,
-                    dto.getAmountInPKR());
+            // Step 4: Call Singleton PaymentManager (this is the actual charge)
+            String transactionId = paymentManager.processOrder(gatewayType, dto.getAmountInPKR());
 
-            // Step 5: Payment succeeded — update Payment entity
-            payment.setStatus(Payment.PaymentStatus.SUCCESS);
-            payment.setTransactionId(transactionId);
-            payment.setGateway(Payment.PaymentGateway.valueOf(gatewayType));
-
-            // If Stripe, also store USD conversion
-            if (gatewayType.equals("STRIPE")) {
-                double amountInUSD = new StripeAdapter().convertPKRToUSD(
-                        dto.getAmountInPKR());
-                payment.setAmountInUSD(amountInUSD);
-            }
-
-            // Step 6: Persist Payment
-            Payment saved = paymentRepository.save(payment);
-
-            // Step 7: Update Order status
-            order.setStatus(Order.OrderStatus.CONFIRMED);
-            orderRepository.save(order);
+            // Step 5: Charge succeeded -> persist in its own transaction
+            Payment saved = processSuccessfulPayment(payment, order, gatewayType, transactionId, dto.getAmountInPKR());
 
             System.out.println("PaymentService: Payment SUCCESS. TxID: " + transactionId);
-
-            // Step 8: Build response
             return buildSuccessResponse(saved);
 
         } catch (Exception e) {
-
-            // Payment failed
-            payment.setStatus(Payment.PaymentStatus.FAILED);
-            paymentRepository.save(payment);
-
-            order.setStatus(Order.OrderStatus.CANCELLED);
-            orderRepository.save(order);
-
+            // Step 6: Charge failed (or DB save failed) -> record failure in its OWN
+            // fresh transaction, completely separate from whatever failed above.
             System.err.println("PaymentService: Payment FAILED. " + e.getMessage());
 
-            return buildFailureResponse(payment, e.getMessage());
+            Payment failedPayment = recordFailedPayment(payment, order);
+            return buildFailureResponse(failedPayment, e.getMessage());
         }
+    }
+
+    /**
+     * Runs in its own NEW transaction. If this fails, it does not affect
+     * or get affected by any other transaction.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Payment processSuccessfulPayment(Payment payment, Order order, String gatewayType,
+            String transactionId, Double amountInPKR) {
+
+        payment.setStatus(Payment.PaymentStatus.SUCCESS);
+        payment.setTransactionId(transactionId);
+        payment.setGateway(Payment.PaymentGateway.valueOf(gatewayType));
+
+        // If Stripe, also store USD conversion
+        if (gatewayType.equals("STRIPE")) {
+            double amountInUSD = new StripeAdapter().convertPKRToUSD(amountInPKR);
+            payment.setAmountInUSD(amountInUSD);
+        }
+
+        Payment saved = paymentRepository.save(payment);
+
+        order.setStatus(Order.OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+
+        return saved;
+    }
+
+    /**
+     * Runs in its own NEW transaction so it can succeed even if the
+     * transaction that attempted the actual charge was rolled back.
+     * gateway is left null here on purpose (e.g. charge never even
+     * started, or gateway adapter threw before returning a tx id) —
+     * the entity now allows that.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Payment recordFailedPayment(Payment payment, Order order) {
+        payment.setStatus(Payment.PaymentStatus.FAILED);
+        Payment saved = paymentRepository.save(payment);
+
+        order.setStatus(Order.OrderStatus.CANCELLED);
+        orderRepository.save(order);
+
+        return saved;
     }
 
     /**
@@ -153,7 +177,7 @@ public class PaymentService {
                 !gatewayType.equals("ALFABANK")) {
             throw new IllegalArgumentException(
                     "Invalid gateway type: " + gatewayType +
-                    ". Accepted: STRIPE, JAZZCASH, ALFABANK");
+                            ". Accepted: STRIPE, JAZZCASH, ALFABANK");
         }
     }
 
@@ -186,8 +210,7 @@ public class PaymentService {
         PaymentResponseDTO response = new PaymentResponseDTO();
         response.setPaymentId(payment.getId());
         response.setOrderId(payment.getOrder().getId());
-        response.setGateway(payment.getGateway() != null ?
-                payment.getGateway().toString() : null);
+        response.setGateway(payment.getGateway() != null ? payment.getGateway().toString() : null);
         response.setStatus(payment.getStatus().toString());
         response.setAmountInPKR(payment.getAmountInPKR());
         response.setAmountInUSD(payment.getAmountInUSD());

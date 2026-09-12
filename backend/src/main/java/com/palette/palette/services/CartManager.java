@@ -20,37 +20,37 @@ import com.palette.palette.patterns.composite.InventoryItem;
 import com.palette.palette.repository.CartItemRepository;
 import com.palette.palette.repository.CartRepository;
 import com.palette.palette.repository.FurnitureBundleRepository;
+import com.palette.palette.repository.CustomRoomRepository;
 import com.palette.palette.repository.ProductRepository;
 import com.palette.palette.repository.UserRepository;
-
+import jakarta.persistence.EntityManager; //extra
+import jakarta.persistence.PersistenceContext; //extra
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class CartManager {
 
-    private static final org.slf4j.Logger log = 
-            org.slf4j.LoggerFactory.getLogger(CartManager.class);
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CartManager.class);
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
     private final FurnitureBundleRepository bundleRepository;
+    private final CustomRoomRepository customRoomRepository;
     private final UserRepository userRepository;
 
     // ── Singleton session store ────────────────────────────────────────────────
-    private final ConcurrentHashMap<Long, Cart> activeCartSessions =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Cart> activeCartSessions = new ConcurrentHashMap<>();
 
     // ── Core Singleton Method ──────────────────────────────────────────────────
     @Transactional
     public Cart getOrCreateCart(Long userId) {
 
-        if (activeCartSessions.containsKey(userId)) {
-            log.debug("CartManager: session hit for userId={}", userId);
-            return activeCartSessions.get(userId);
-        }
-
+        // ✅ FIX: Removed stale cache check — always read from DB to get fresh state
         Optional<Cart> existingCart = cartRepository.findByUserId(userId);
         if (existingCart.isPresent()) {
             Cart cart = existingCart.get();
@@ -87,8 +87,7 @@ public class CartManager {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Product not found with id: " + dto.getItemId()));
 
-            Optional<CartItem> existing =
-                    cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId());
+            Optional<CartItem> existing = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId());
 
             if (existing.isPresent()) {
                 CartItem line = existing.get();
@@ -116,8 +115,7 @@ public class CartManager {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Bundle not found with id: " + dto.getItemId()));
 
-            Optional<CartItem> existing =
-                    cartItemRepository.findByCartIdAndBundleId(cart.getId(), bundle.getId());
+            Optional<CartItem> existing = cartItemRepository.findByCartIdAndBundleId(cart.getId(), bundle.getId());
 
             if (existing.isPresent()) {
                 CartItem line = existing.get();
@@ -139,13 +137,34 @@ public class CartManager {
                         bundle.getId(), cart.getId(), bundle.getPrice());
             }
 
-            } else if (type.equals("CUSTOM_ROOM")) {
-            // Strictly for testing: log the custom room addition safely without throwing error
-            log.info("CartManager: Successfully processed custom room addition for ID: {}", dto.getItemId());
+        } else if (type.equals("CUSTOM_ROOM")) {
+            com.palette.palette.entities.CustomRoom room = customRoomRepository.findById(dto.getItemId())
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Custom room not found with id: " + dto.getItemId()));
+
+            Optional<CartItem> existing = cartItemRepository.findByCartIdAndCustomRoomId(cart.getId(), room.getId());
+
+            if (existing.isPresent()) {
+                CartItem line = existing.get();
+                line.setQuantity(line.getQuantity() + dto.getQuantity());
+                cartItemRepository.save(line);
+                log.debug("CartManager: incremented custom room {} quantity in cart {}", room.getId(), cart.getId());
+            } else {
+                CartItem newLine = new CartItem();
+                newLine.setCart(cart);
+                newLine.setCustomRoom(room);
+                newLine.setItemType(CartItem.ItemType.CUSTOM_ROOM);
+                newLine.setQuantity(dto.getQuantity());
+                newLine.setUnitPrice(room.getTotalPrice());
+
+                cartItemRepository.save(newLine);
+                log.debug("CartManager: added custom room {} to cart {}", room.getId(), cart.getId());
+            }
+
         } else {
             throw new IllegalArgumentException(
                     "Invalid itemType: '" + dto.getItemType() +
-                    "'. Accepted values are 'PRODUCT' or 'BUNDLE'.");
+                            "'. Accepted values are 'PRODUCT', 'BUNDLE', or 'CUSTOM_ROOM'.");
         }
 
         Cart refreshed = cartRepository.findById(cart.getId())
@@ -177,6 +196,10 @@ public class CartManager {
                 item = line.getBundle();
                 itemType = "BUNDLE";
                 itemId = line.getBundle().getId();
+            } else if (line.getItemType() == CartItem.ItemType.CUSTOM_ROOM && line.getCustomRoom() != null) {
+                item = line.getCustomRoom();
+                itemType = "CUSTOM_ROOM";
+                itemId = line.getCustomRoom().getId();
             } else {
                 log.warn("CartManager: orphaned CartItem id={} skipped", line.getId());
                 continue;
@@ -186,7 +209,8 @@ public class CartManager {
             double lineTotal = unitPrice * line.getQuantity();
             grandTotal += lineTotal;
 
-            // ❌ REMOVED CartResponseDTO.CartLineDTO.builder() -> REPLACED with custom constructor or setters
+            // ❌ REMOVED CartResponseDTO.CartLineDTO.builder() -> REPLACED with custom
+            // constructor or setters
             CartResponseDTO.CartLineDTO lineDTO = new CartResponseDTO.CartLineDTO();
             lineDTO.setCartItemId(line.getId());
             lineDTO.setItemType(itemType);
@@ -195,6 +219,16 @@ public class CartManager {
             lineDTO.setQuantity(line.getQuantity());
             lineDTO.setUnitPrice(unitPrice);
             lineDTO.setLineTotal(lineTotal);
+
+            List<String> subItems = null;
+            if (line.getItemType() == CartItem.ItemType.BUNDLE && line.getBundle() != null) {
+                subItems = line.getBundle().getProducts().stream()
+                        .map(com.palette.palette.entities.Product::getName)
+                        .collect(java.util.stream.Collectors.toList());
+            } else if (line.getItemType() == CartItem.ItemType.CUSTOM_ROOM && line.getCustomRoom() != null) {
+                subItems = new java.util.ArrayList<>(line.getCustomRoom().getFurnitureItems());
+            }
+            lineDTO.setSubItems(subItems);
 
             lineDTOs.add(lineDTO);
         }
@@ -222,11 +256,27 @@ public class CartManager {
                     "Cart item " + cartItemId + " does not belong to user " + userId);
         }
 
-        cartItemRepository.delete(item);
+        log.info("ABOUT TO DELETE cartItemId={}", cartItemId);
 
-        Cart refreshed = cartRepository.findById(cart.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Cart session lost"));
-        activeCartSessions.put(userId, refreshed);
+        // 1. CRITICAL: Remove the item from the parent Cart's collection in memory
+        if (cart.getItems() != null) {
+            cart.getItems().remove(item);
+        }
+
+        // 2. Clear the child's reference to the parent
+        item.setCart(null);
+
+        // 3. Now perform the standard Spring Data delete (you can remove the
+        // EntityManager test code)
+        cartItemRepository.delete(item);
+        cartItemRepository.flush(); // Force the SQL to fire right now
+
+        log.info("DELETE CALL COMPLETED for cartItemId={}", cartItemId);
+
+        // 4. Save the updated cart to the database and update your session cache
+        Cart savedCart = cartRepository.save(cart);
+        activeCartSessions.put(userId, savedCart);
+
         log.info("CartManager: removed item {} from cart {}", cartItemId, cart.getId());
     }
 

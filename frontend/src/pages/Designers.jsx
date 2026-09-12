@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronLeft, FiDollarSign, FiAward, FiClock } from 'react-icons/fi'
+import { API_ENDPOINTS } from '../config/api'
 
 // Premium Theme Constants matching Quiz exactly
 const T = {
@@ -12,7 +13,6 @@ const T = {
   white: "#FFFFFF",
 }
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-const API = 'http://localhost:8081'
 
 export default function DesignersPage({ onBack }) {
   const [designers, setDesigners] = useState([])
@@ -23,13 +23,13 @@ export default function DesignersPage({ onBack }) {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    fetch(`${API}/api/designers`)
+    fetch(API_ENDPOINTS.DESIGNERS)
       .then(r => {
         if (!r.ok) throw new Error('Failed to fetch')
         return r.json()
       })
       .then(data => { setDesigners(data); setLoading(false) })
-      .catch(() => { setError('Could not load designers. Make sure your Spring Boot backend is running on port 8081.'); setLoading(false) })
+      .catch(() => { setError('Could not load designers. Please ensure the backend is running.'); setLoading(false) })
   }, [])
 
   const styleOptions = ['ALL', 'MINIMALIST', 'BOHEMIAN', 'SCANDINAVIAN']

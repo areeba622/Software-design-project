@@ -1,5 +1,11 @@
 package com.palette.palette.services;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.palette.palette.dto.DesignQuizRequestDTO;
 import com.palette.palette.dto.DesignQuizResponseDTO;
 import com.palette.palette.dto.ProductDTO;
@@ -12,11 +18,6 @@ import com.palette.palette.patterns.factory.StyleBundle;
 import com.palette.palette.repository.DesignQuizRepository;
 import com.palette.palette.repository.ProductRepository;
 import com.palette.palette.repository.UserRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * DesignQuizService - UPDATED FOR BOHEMIAN, SCANDINAVIAN, MINIMALIST
@@ -29,8 +30,8 @@ public class DesignQuizService {
     private final UserRepository userRepository;
 
     public DesignQuizService(ProductRepository productRepository,
-                             DesignQuizRepository designQuizRepository,
-                             UserRepository userRepository) {
+            DesignQuizRepository designQuizRepository,
+            UserRepository userRepository) {
         this.productRepository = productRepository;
         this.designQuizRepository = designQuizRepository;
         this.userRepository = userRepository;
@@ -52,22 +53,20 @@ public class DesignQuizService {
 
         // ✅ FACTORY CREATES BUNDLE WITH UPDATED STYLES
         StyleBundle styleBundle = AestheticBundleFactory.createBundle(
-            normalizedStyle, 
-            normalizedRoom
-        );
+                normalizedStyle,
+                normalizedRoom);
 
         List<Product> productsInRoom = productRepository.findByRoomType(
-            Product.RoomType.valueOf(normalizedRoom)
-        );
+                Product.RoomType.valueOf(normalizedRoom));
 
         List<ProductDTO> recommendedProducts = productsInRoom.stream()
-            .filter(p -> styleBundle.getRecommendedProductIds().contains(p.getId()))
-            .map(this::convertToDTO)
-            .collect(Collectors.toList());
+                .filter(p -> styleBundle.getRecommendedProductIds().contains(p.getId()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
 
         double totalPrice = recommendedProducts.stream()
-            .mapToDouble(ProductDTO::getPriceInPKR)
-            .sum();
+                .mapToDouble(ProductDTO::getPriceInPKR)
+                .sum();
 
         double discountedPrice = totalPrice * styleBundle.getDiscountFactor();
 
@@ -76,33 +75,30 @@ public class DesignQuizService {
         }
 
         String message = String.format(
-            "Perfect %s %s setup! %d items recommended at PKR %.0f (with discount)",
-            normalizedStyle,
-            normalizedRoom,
-            recommendedProducts.size(),
-            discountedPrice
-        );
+                "Perfect %s %s setup! %d items recommended at PKR %.0f (with discount)",
+                normalizedStyle,
+                normalizedRoom,
+                recommendedProducts.size(),
+                discountedPrice);
 
         // Create BundleDTO from StyleBundle
         DesignQuizResponseDTO.BundleDTO bundleDTO = new DesignQuizResponseDTO.BundleDTO(
-            null,
-            normalizedStyle,
-            styleBundle.getStyleDescription(),
-            styleBundle.getDiscountFactor(),
-            totalPrice
-        );
+                null,
+                normalizedStyle,
+                styleBundle.getStyleDescription(),
+                styleBundle.getDiscountFactor(),
+                totalPrice);
 
         // Create recommendation title
         String recommendationTitle = normalizedStyle + " " + normalizedRoom;
 
         DesignQuizResponseDTO response = new DesignQuizResponseDTO(
-            normalizedStyle,
-            normalizedRoom,
-            recommendationTitle,
-            message,
-            bundleDTO,
-            recommendedProducts
-        );
+                normalizedStyle,
+                normalizedRoom,
+                recommendationTitle,
+                message,
+                bundleDTO,
+                recommendedProducts);
 
         return response;
     }
@@ -114,8 +110,8 @@ public class DesignQuizService {
 
     private void saveQuizHistory(Long userId, String style, String roomType) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: " + userId));
 
         DesignQuiz quiz = new DesignQuiz(user, style, roomType);
         designQuizRepository.save(quiz);
@@ -126,14 +122,22 @@ public class DesignQuizService {
         return designQuizRepository.findByUserId(userId);
     }
 
+        @Transactional(readOnly = true)
+    public DesignQuiz getLatestQuiz(Long userId) {
+        return designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No quiz found for user with id: " + userId));
+    }
+
     private ProductDTO convertToDTO(Product product) {
-        return new ProductDTO(
-            product.getId(),
-            product.getName(),
-            product.getPriceInPKR(),
-            product.getCategory() != null ? product.getCategory().toString() : "OTHER",
-            product.getRoomType() != null ? product.getRoomType().toString() : "UNKNOWN",
-            product.getAestheticStyle() != null ? product.getAestheticStyle().toString() : null
-        );
+        ProductDTO dto = new ProductDTO(
+                product.getId(),
+                product.getName(),
+                product.getPriceInPKR(),
+                product.getCategory() != null ? product.getCategory().toString() : "OTHER",
+                product.getRoomType() != null ? product.getRoomType().toString() : "UNKNOWN",
+                product.getAestheticStyle() != null ? product.getAestheticStyle().toString() : null);
+        dto.setImageUrl(product.getImageUrl()); // ← ONLY CHANGE
+        return dto;
     }
 }

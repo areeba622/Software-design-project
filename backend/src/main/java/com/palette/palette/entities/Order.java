@@ -47,8 +47,6 @@ public class Order {
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Payment payment;
 
-   
-
     // ── Constructors ───────────────────────────────────────────────────────────
 
     public Order() {
@@ -122,16 +120,16 @@ public class Order {
     // ── Enum: OrderStatus ──────────────────────────────────────────────────────
 
     public enum OrderStatus {
-        PENDING,      // Order created, awaiting payment
-        CONFIRMED,    // Payment successful
-        SHIPPED,      // Order dispatched
-        DELIVERED,    // Received by customer
-        CANCELLED     // Order cancelled
+        PENDING, // Order created, awaiting payment
+        CONFIRMED, // Payment successful
+        SHIPPED, // Order dispatched
+        DELIVERED, // Received by customer
+        CANCELLED // Order cancelled
     }
 
     // ── toString ───────────────────────────────────────────────────────────────
 
-        @PrePersist
+    @PrePersist
     protected void onCreate() {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
@@ -140,8 +138,6 @@ public class Order {
             this.status = OrderStatus.PENDING;
         }
     }
-
-
 
     @Override
     public String toString() {
@@ -158,8 +154,10 @@ public class Order {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Order order = (Order) o;
         return id != null && id.equals(order.id);
     }

@@ -32,5 +32,6 @@ public class CartResponseDTO {
         private int quantity;
         private double unitPrice;       // from InventoryItem.getPrice()
         private double lineTotal;       // unitPrice * quantity
+        private List<String> subItems;  // e.g. names of products inside a bundle or custom room
     }
 }

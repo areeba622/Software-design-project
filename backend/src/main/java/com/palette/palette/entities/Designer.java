@@ -29,11 +29,11 @@ public class Designer {
     @Column(length = 500)
     private String portfolioUrl;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Double hourlyRatePKR;
 
     @Column(nullable = false)
-    private String specialty;  // e.g., "Minimalist", "Boho", "Desi"
+    private String specialty;  // e.g., "Minimalist", "Bohemian", "Scanvandian"
 
     // Bridge pattern: Designer linked to one aesthetic style
     @ManyToOne
