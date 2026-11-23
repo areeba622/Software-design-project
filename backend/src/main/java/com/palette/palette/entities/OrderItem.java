@@ -26,10 +26,10 @@ public class OrderItem {
     @Column(nullable = false)
     private Integer quantity = 1;
 
-    @Column(nullable = false)
+    @Column(name = "unit_price_pkr", nullable = false)
     private Double unitPrice = 0.0;
 
-    @Column(nullable = false)
+    @Column(name = "line_total_pkr", nullable = false)
     private Double lineTotal = 0.0;
 
     public enum ItemType {

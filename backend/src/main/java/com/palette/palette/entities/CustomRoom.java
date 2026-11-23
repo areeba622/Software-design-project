@@ -15,10 +15,17 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import com.palette.palette.patterns.composite.InventoryItem;
 
+/**
+ * A room designed by a user in the Room Builder (built via
+ * {@link com.palette.palette.patterns.builder.RoomBuilder}).
+ * Acts as a composite {@link InventoryItem} so it can sit in the cart next to
+ * products and bundles. Width and length are in feet.
+ */
 @Entity
 @Table(name = "custom_rooms")
 public class CustomRoom implements InventoryItem {
@@ -32,18 +39,12 @@ public class CustomRoom implements InventoryItem {
 
     @Column(nullable = false)
     private Integer width;
-    // NEW CODE
-    @Column(name = "width_ft", nullable = false)
-    private Integer widthFt;
-    // --
+
     @Column(nullable = false)
     private Integer length;
-    // NEW CODE
-    @Column(name = "length_ft", nullable = false)
-    private Integer lengthFt;
 
     private String flooring;
-    
+
     private String wallpaper;
 
     @ElementCollection
@@ -51,147 +52,45 @@ public class CustomRoom implements InventoryItem {
     @Column(name = "furniture_item")
     private List<String> furnitureItems = new ArrayList<>();
 
-    @Column(nullable = false)
+    @Column(name = "total_price_pkr", nullable = false)
     private Double totalPrice = 0.0;
 
-    @Column(name = "total_price_inpkr", nullable = false)
-    private Double totalPriceInPkr = 0.0;
-
+    @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    // ── ADDED: maps the existing is_finalized NOT NULL column in the DB ──────
-    @Column(name = "is_finalized", nullable = false)
+    @Column(nullable = false)
     private Boolean isFinalized = false;
-    // ─────────────────────────────────────────────────────────────────────────
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // ── Constructors ──────────────────────────────────────────────────────────
     public CustomRoom() {
     }
 
-    public CustomRoom(String roomType, Integer width, Integer length) {
-        this.roomType = roomType;
-        // this.width = width;
-        this.widthFt = width;
-        // this.length = length;
-        this.lengthFt = length;
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
     }
 
-    // ── Getters & Setters ─────────────────────────────────────────────────────
-    public Long getId() {
-        return id;
-    }
+    // ── InventoryItem ────────────────────────────────────────────────────────
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    @Override
+    public Long getId() { return id; }
 
-    public String getRoomType() {
-        return roomType;
-    }
-
-    public void setRoomType(String roomType) {
-        this.roomType = roomType;
-    }
-
-    public Integer getWidth() {
-        return width;
-    }
-
-    public void setWidth(Integer width) {
-        this.width = width;
-        this.widthFt = width;
-    }
-
-    public Integer getWidthFt() {
-        return widthFt;
-    }
-
-    public void setWidthFt(Integer widthFt) {
-        this.widthFt = widthFt;
-    }
-
-    public Integer getLength() {
-        return length;
-    }
-
-    public void setLength(Integer length) {
-        this.length = length;
-        this.lengthFt = length;
-    }
-
-    public Integer getLengthFt() {
-        return lengthFt;
-    }
-
-    public void setLengthFt(Integer lengthFt) {
-        this.lengthFt = lengthFt;
-    }
-
-    public String getFlooring() {
-        return flooring;
-    }
-
-    public void setFlooring(String flooring) {
-        this.flooring = flooring;
-    }
-
-    public String getWallpaper() {
-        return wallpaper;
-    }
-
-    public void setWallpaper(String wallpaper) {
-        this.wallpaper = wallpaper;
-    }
-
-    public List<String> getFurnitureItems() {
-        return furnitureItems;
-    }
-
-    public void setFurnitureItems(List<String> furnitureItems) {
-        this.furnitureItems = furnitureItems;
-    }
-
-    public Double getTotalPrice() {
-        return totalPrice;
-    }
-
-    public void setTotalPrice(Double totalPrice) {
-        this.totalPrice = totalPrice;
-        this.totalPriceInPkr = totalPrice;
-    }
-
-    public Double getTotalPriceInPkr() {
-        return totalPriceInPkr;
-    }
-
-    public void setTotalPriceInPkr(Double totalPriceInPkr) {
-        this.totalPriceInPkr = totalPriceInPkr;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    // ── InventoryItem Implementation ──────────────────────────────────────────
+    /** e.g. "Living Room Bundle w/ Warm Hardwood & Botanical Wallpaper". */
     @Override
     public String getName() {
-        String baseName = (roomType != null ? roomType.replace("_", " ") : "Custom Room");
-        // Capitalize nicely
-        baseName = Arrays.stream(baseName.split(" "))
+        String base = roomType != null ? roomType.replace("_", " ") : "Custom Room";
+        base = Arrays.stream(base.trim().split("\\s+"))
+                .filter(word -> !word.isEmpty())
                 .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1).toLowerCase())
                 .collect(Collectors.joining(" ")) + " Bundle";
-        
-        String floorStr = (flooring != null && !flooring.equals("Standard")) ? " w/ " + flooring : "";
-        String wallStr = (wallpaper != null && !wallpaper.isEmpty()) ? " & " + wallpaper : "";
-        return baseName + floorStr + wallStr;
+        String floorPart = (flooring != null && !flooring.equals("Standard")) ? " w/ " + flooring : "";
+        String wallPart = (wallpaper != null && !wallpaper.isBlank()) ? " & " + wallpaper : "";
+        return base + floorPart + wallPart;
     }
 
     @Override
@@ -199,47 +98,56 @@ public class CustomRoom implements InventoryItem {
         return totalPrice != null ? totalPrice : 0.0;
     }
 
+    // ── Getters / setters ────────────────────────────────────────────────────
 
-    // ── ADDED getter/setter for isFinalized ───────────────────────────────────
-    public Boolean getIsFinalized() {
-        return isFinalized;
-    }
+    public void setId(Long id) { this.id = id; }
 
-    public void setIsFinalized(Boolean isFinalized) {
-        this.isFinalized = isFinalized;
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+    public String getRoomType() { return roomType; }
+    public void setRoomType(String roomType) { this.roomType = roomType; }
 
-    public User getUser() {
-        return user;
-    }
+    public Integer getWidth() { return width; }
+    public void setWidth(Integer width) { this.width = width; }
 
-    public void setUser(User user) {
-        this.user = user;
-    }
+    public Integer getLength() { return length; }
+    public void setLength(Integer length) { this.length = length; }
+
+    public String getFlooring() { return flooring; }
+    public void setFlooring(String flooring) { this.flooring = flooring; }
+
+    public String getWallpaper() { return wallpaper; }
+    public void setWallpaper(String wallpaper) { this.wallpaper = wallpaper; }
+
+    public List<String> getFurnitureItems() { return furnitureItems; }
+    public void setFurnitureItems(List<String> furnitureItems) { this.furnitureItems = furnitureItems; }
+
+    public Double getTotalPrice() { return totalPrice; }
+    public void setTotalPrice(Double totalPrice) { this.totalPrice = totalPrice; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Boolean getIsFinalized() { return isFinalized; }
+    public void setIsFinalized(Boolean isFinalized) { this.isFinalized = isFinalized; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         CustomRoom that = (CustomRoom) o;
         return id != null && id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return id != null ? id.hashCode() : 0;
+        return getClass().hashCode();
     }
 
     @Override
     public String toString() {
-        return "CustomRoom{" +
-                "id=" + id +
-                ", roomType='" + roomType + '\'' +
-                ", dimensions=" + width + "x" + length +
-                ", totalPrice=" + totalPrice +
-                '}';
+        return "CustomRoom{id=" + id + ", roomType='" + roomType + "', dimensions="
+                + width + "x" + length + ", totalPrice=" + totalPrice + "}";
     }
 }

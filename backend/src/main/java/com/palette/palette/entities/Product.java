@@ -28,7 +28,7 @@ public class Product implements InventoryItem {
     @Column(length = 500)
     private String description;
 
-    @Column(nullable = false)
+    @Column(name = "price_pkr", nullable = false)
     private Double priceInPKR;
 
     private String imageUrl;

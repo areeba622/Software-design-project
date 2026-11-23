@@ -29,7 +29,7 @@ public class Designer {
     @Column(length = 500)
     private String portfolioUrl;
 
-    @Column(nullable = true)
+    @Column(name = "hourly_rate_pkr", nullable = false)
     private Double hourlyRatePKR;
 
     @Column(nullable = false)

@@ -38,7 +38,7 @@ public class Order {
     @Column(nullable = false)
     private OrderStatus status;
 
-    @Column(name = "total_amountpkr", nullable = false)
+    @Column(name = "grand_total_pkr", nullable = false)
     private Double grandTotal;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

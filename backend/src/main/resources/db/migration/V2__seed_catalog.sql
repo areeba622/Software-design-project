@@ -1,0 +1,158 @@
+-- =============================================================================
+-- Palette — reference data (styles, designers, product catalogue)
+-- Exported from the team's local development database on 2026-11-23.
+--
+-- Product IDs are kept exactly as they were: AestheticBundleFactory
+-- recommends products by these IDs, so do not renumber them.
+--
+-- Small data fixes made during export:
+--   * Only the three styles the app actually uses are kept (the two unused
+--     "Modern Minimalist" / "Classic Luxury" rows and the two empty bundles
+--     that pointed at them are dropped).
+--   * Scandinavian rugs (60-64) were filed as DECOR  -> now RUG.
+--   * Scandinavian wardrobes (65-71) were filed as OTHER -> now WARDROBE.
+--   * Products 16-18 were filed under KITCHEN, but the style quiz recommends
+--     them for a Minimalist DINING_ROOM and filters by room -> now DINING_ROOM.
+-- =============================================================================
+
+INSERT INTO aesthetic_styles (id, name, description) VALUES
+    (1, 'MINIMALIST',   'Clean lines, essential design, uncluttered spaces with focus on function and form'),
+    (2, 'BOHEMIAN',     'Free-spirited, eclectic, artistic, nature-inspired with vibrant colors and mixed textures'),
+    (3, 'SCANDINAVIAN', 'Light, airy, functional design with natural materials, cozy warmth, and minimalist sophistication');
+
+INSERT INTO designers (id, name, email, bio, portfolio_url, hourly_rate_pkr, specialty, preferred_style_id) VALUES
+    (1, 'Ayesha Khan', 'ayesha@palette.com', 'Award-winning interior designer with 8 years of experience in minimalist spaces.', 'https://ayesha.portfolio.com', 45000, 'Minimalist Designer', 1),
+    (2, 'Zain Ahmed', 'zain@palette.com', 'Specializes in bohemian and eclectic interiors with a modern Pakistani touch.', 'https://zain.portfolio.com', 35000, 'Bohemian Designer', 2),
+    (3, 'Muhammad Zohran', 'zohran@palette.com', 'Dedicated to creating bespoke luxury spaces that balance timeless elegance with modern functionality. Expert in high-end penthouse and villa designs.', 'https://zohran.portfolio.com', 90000, 'High-End Luxury Residential Designer', 3),
+    (4, 'Sara Malik', 'sara@palette.com', 'Clean-line minimalist designer focused on functional elegance for modern apartments.', 'https://sara.portfolio.com', 30000, 'Minimalist Designer', 1),
+    (5, 'Nadia Hussain', 'nadia@palette.com', 'Bohemian soul with a flair for rich textures, vibrant patterns, and layered storytelling in interiors.', 'https://nadia.portfolio.com', 55000, 'Bohemian Designer', 2),
+    (6, 'Omar Farooq', 'omar@palette.com', 'Expert in Scandinavian-inspired spaces - light woods, neutral tones, and purposeful simplicity.', 'https://omar.portfolio.com', 75000, 'Scandinavian Designer', 3);
+
+INSERT INTO products (id, name, description, price_pkr, image_url, category, room_type, aesthetic_style, vendor_name) VALUES
+    (1, 'Minimalist Platform Bed', 'A sleek and clean minimalist bed for modern bedrooms.', 45000, '/products/minimal/Bed1.jpeg', 'BED', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (2, 'Sleek Oak Bed Frame', 'Beautifully crafted natural oak wood bed with simple lines.', 52000, '/products/minimal/Bed2.jpeg', 'BED', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (3, 'Modern Low-Profile Bed', 'Low-profile design that makes your bedroom look spacious.', 39000, '/products/minimal/Bed3.jpeg', 'BED', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (4, 'Nordic Fabric Bed', 'Comfortable upholstered headboard with a minimalist aesthetic.', 48000, '/products/minimal/Bed4.jpeg', 'BED', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (5, 'Zen Walnut Bed', 'Premium walnut wood bed inspired by Japanese minimalist style.', 60000, '/products/minimal/Bed5.jpeg', 'BED', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (6, 'Minimalist Floating Shelf', 'Sleek oak wood floating wall shelf with invisible mounting.', 12000, '/products/minimal/shelf1.jpeg', 'DECOR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (7, '3-Tier Geometric Wall Shelf', 'A modern geometric structure perfect for books and small plants.', 15500, '/products/minimal/shelf2.jpeg', 'DECOR', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (8, 'Industrial Metal & Wood Shelf', 'Matte black steel framework combined with rustic walnut wood.', 22000, '/products/minimal/shelf3.jpeg', 'DECOR', 'OFFICE', 'MINIMALIST', 'Palette Local'),
+    (9, 'Corner Display Shelf', 'Space-saving multi-tier corner shelf with clean minimalist lines.', 9500, '/products/minimal/shelf4.jpeg', 'DECOR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (10, 'Sleek Hexagon Wall Shelf Set', 'Set of 3 hexagonal shelves to create a unique aesthetic pattern.', 18000, '/products/minimal/shelf5.jpeg', 'DECOR', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (11, 'Minimalist Kitchen Cabinet Set', 'Sleek matte finish overhead and base cabinets for modern kitchens.', 120000, '/products/minimal/kitchen1.jpeg', 'OTHER', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (12, 'Sleek Kitchen Island Table', 'Solid white quartz top island table with hidden storage shelves.', 85000, '/products/minimal/kitchen2.jpeg', 'TABLE', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (13, 'Modern Counter Stool', 'Minimalist wooden stool with a slim black iron frame cushion.', 14000, '/products/minimal/kitchen3.jpeg', 'CHAIR', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (14, 'Minimalist Pendant Kitchen Lamp', 'Matte black cone pendant light hanging perfectly over counters.', 6500, '/products/minimal/kitchen4.jpeg', 'LAMP', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (15, 'Compact 2-Tier Spice Rack', 'Stainless steel minimalist spice organizer for countertops.', 4500, '/products/minimal/kitchen5.jpeg', 'DECOR', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (16, 'Nordic Dining Table Set', 'Slim oak wood table with matching minimalist dining chairs.', 95000, '/products/minimal/kitchen6.jpeg', 'TABLE', 'DINING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (17, 'Matte Ceramic Dinnerware Set', 'Set of 16 pieces premium clay plates and bowls in neutral tones.', 18500, '/products/minimal/kitchen7.jpeg', 'DECOR', 'DINING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (18, 'Minimalist Floating Mug Rack', 'Wall-mounted walnut wood rack with 6 sleek brass hooks.', 3800, '/products/minimal/kitchen8.jpeg', 'DECOR', 'DINING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (19, 'Sleek Electric Kettle', 'Premium matte white fast-boiling kettle with wooden handle accent.', 12500, '/products/minimal/kitchen9.jpeg', 'OTHER', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (20, 'Minimalist Lounge Chair', 'Ergonomic wooden frame accent chair with cream upholstered padding.', 24500, '/products/minimal/chair (1).jpeg', 'CHAIR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (21, 'Sleek Desk Chair', 'Low-profile matte black swivel chair for home offices.', 18000, '/products/minimal/chair (2).jpeg', 'CHAIR', 'OFFICE', 'MINIMALIST', 'Palette Local'),
+    (22, 'Nordic Dining Chair', 'Simple oak wood dining chair with a clean geometric silhouette.', 13500, '/products/minimal/chair (3).jpeg', 'CHAIR', 'DINING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (23, 'Minimalist Patio Chair', 'Weather-resistant slim metal wire chair for outdoor or balcony.', 11000, '/products/minimal/chair (4).jpeg', 'CHAIR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (24, 'Modern Cozy Armchair', 'Deep seat upholstered armchair in a neutral tone for bedrooms.', 32000, '/products/minimal/chair (5).jpeg', 'CHAIR', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (25, 'Minimalist Bar Stool', 'Tall counter-height wooden stool with a sleek black footrest.', 12500, '/products/minimal/chair (6).jpeg', 'CHAIR', 'KITCHEN', 'MINIMALIST', 'Palette Local'),
+    (26, 'Elegant Corner Chair', 'Compact accent piece designed to fit perfectly into minimal spaces.', 16000, '/products/minimal/chair (7).jpeg', 'CHAIR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (27, 'Boho Knit Pattern Throw', 'Cozy textured throw blanket featuring minimalist geometric lines.', 4200, '/products/minimal/kinttingpatterns (1).jpeg', 'DECOR', 'BEDROOM', 'MINIMALIST', 'Palette Local'),
+    (28, 'Textured Macrame Wall Hanging', 'Handwoven minimal cotton cord wall art on a natural wooden dowel.', 5500, '/products/minimal/kinttingpatterns (2).jpeg', 'DECOR', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (29, 'Sleek 3-Seater Minimalist Sofa', 'Low-profile linear sofa with high-density foam and premium grey fabric.', 88000, '/products/minimal/sofa.jpeg', 'SOFA', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (30, 'Eco-Friendly Wood Cleaner', 'Premium organic spray cleaner formulated specifically for matte wooden furniture.', 1800, '/products/minimal/woodencleaner.jpeg', 'DECOR', 'OFFICE', 'MINIMALIST', 'Palette Local'),
+    (31, 'Nordic Light Oak Bed', 'Classic Scandinavian bed frame made from premium light oak wood.', 55000, '/products/scandinavian/woodenbed (1).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (32, 'Scandi Minimalist Bed', 'Low profile platform wooden bed with spindle headboard design.', 48000, '/products/scandinavian/woodenbed (2).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (33, 'Freja Solid Ash Bed', 'Beautiful tapered legs ash wood bed reflecting timeless Nordic craft.', 62000, '/products/scandinavian/woodenbed (3).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (34, 'Copenhagen Floating Bed', 'Sleek wood frame with integrated nightstands for a clean Scandi look.', 75000, '/products/scandinavian/woodenbed (4).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (35, 'Oslo Eco Pine Bed Frame', 'Made from sustainably sourced pine wood with a soft natural finish.', 42000, '/products/scandinavian/woodenbed (5).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (36, 'Stockholm Upholstered Bed', 'Light grey wool blend upholstered headboard with oak wooden legs.', 68000, '/products/scandinavian/woodenbed (6).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (37, 'Hygge Spindle Wood Bed', 'Cozy aesthetic bed featuring a beautifully crafted high spindle back.', 59000, '/products/scandinavian/woodenbed (7).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (38, 'Bergen Storage Platform Bed', 'Functional Nordic design with spacious under-bed wooden drawers.', 72000, '/products/scandinavian/woodenbed (8).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (39, 'Aura White-Washed Bed', 'Premium white-washed birch wood frame for a bright bedroom feel.', 53000, '/products/scandinavian/woodenbed (9).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (40, 'Lumi Slatted Walnut Bed', 'Scandi-modern fusion slatted headboard using warm natural wood tones.', 66000, '/products/scandinavian/woodenbed (10).jpeg', 'BED', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (41, 'Nordic Glass Display Tray', 'Minimalist ribbed glass tray with a sleek wooden base for decor.', 4500, '/products/scandinavian/glasstray.jpeg', 'DECOR', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (42, 'Scandi Wooden Spoon Set', 'Handcrafted organic beechwood cooking utilities (Part 1).', 2800, '/products/scandinavian/kitchenwarewooden (1).jpeg', 'DECOR', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (43, 'Nordic Wooden Salad Bowl', 'Deep grain premium wooden bowl for serving fresh salads (Part 3).', 4200, '/products/scandinavian/kitchenwarewooden (3).jpeg', 'DECOR', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (44, 'Minimalist Pleated Table Lamp', 'Iconic Scandinavian pleated fabric shade lamp with light oak stem.', 8500, '/products/scandinavian/lamp.jpeg', 'LAMP', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (45, 'Matte Stoneware Coffee Mug Set', 'Set of 4 earthy, matte-finished ceramic mugs for a cozy hygge morning.', 3900, '/products/scandinavian/stoneware.jpeg', 'DECOR', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (46, 'Minimalist Ash Wood Serving Tray', 'Simple rectangular serving tray with integrated handle cutouts.', 3400, '/products/scandinavian/tray.jpeg', 'DECOR', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (47, 'Nordic Accent Lounge Chair', 'Beautiful light ash wood frame lounge chair with a woven paper cord seat.', 26500, '/products/scandinavian/chair(S) (1).jpeg', 'CHAIR', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (48, 'Copenhagen Dining Chair', 'Minimalist wooden dining chair with a curved backrest for premium comfort.', 14000, '/products/scandinavian/chair(S) (2).jpeg', 'CHAIR', 'DINING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (49, 'Oslo Swivel Desk Chair', 'Sleek home office chair combining natural oak wood accents with soft grey fabric.', 19500, '/products/scandinavian/chair(S) (3).jpeg', 'CHAIR', 'OFFICE', 'SCANDINAVIAN', 'Palette Local'),
+    (50, 'Scandi Minimalist Armchair', 'Comfy cushioned armchair with clean geometric lines and tapered wooden legs.', 34000, '/products/scandinavian/chair(S) (4).jpeg', 'CHAIR', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (51, 'Stockholm Spindle Chair', 'Classic Nordic spindle-back wooden chair in a beautiful white-washed finish.', 15500, '/products/scandinavian/chair(S) (5).jpeg', 'CHAIR', 'DINING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (52, 'Hygge Counter Stool', 'Minimalist kitchen bar stool made from durable solid oak and light upholstery.', 13000, '/products/scandinavian/chair(S) (6).jpeg', 'CHAIR', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (53, 'Minimalist Wooden Tripod Lamp', 'Floor lamp featuring a light pine wood tripod base and white fabric drum shade.', 12500, '/products/scandinavian/lamp(S) (1).jpeg', 'LAMP', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (54, 'Nordic Pleated Pendant Light', 'Elegant hanging ceramic pendant lamp with a beautifully structured pleated design.', 7800, '/products/scandinavian/lamp(S) (2).jpeg', 'LAMP', 'DINING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (55, 'Oslo Sleek Matte Desk Lamp', 'Adjustable metal study lamp with a wooden base accent, perfect for productivity.', 6200, '/products/scandinavian/lamp(S) (3).jpeg', 'LAMP', 'OFFICE', 'SCANDINAVIAN', 'Palette Local'),
+    (56, 'Scandi Spherical Paper Lantern', 'Iconic rice paper globe table lamp emitting a warm, soft hygge glow.', 4500, '/products/scandinavian/lamp(S) (4).jpeg', 'LAMP', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (57, 'Copenhagen Arching Floor Lamp', 'Sleek matte white arching arm lamp with a natural solid marble base.', 16500, '/products/scandinavian/lamp(S) (5).jpeg', 'LAMP', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (58, 'Nordic Bedside Ceramic Lamp', 'Small textured ceramic base table lamp with an organic linen shade.', 5800, '/products/scandinavian/lamp(S) (6).jpeg', 'LAMP', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (59, 'Lumi Geometric Wooden Pendant', 'Laser-cut birch wood geometric hanging light fixture for modern spaces.', 9200, '/products/scandinavian/lamp(S) (7).jpeg', 'LAMP', 'KITCHEN', 'SCANDINAVIAN', 'Palette Local'),
+    (60, 'Nordic Geometric Wool Rug', 'Handwoven plush wool rug with classic Scandinavian clean lines and neutral geometric patterns.', 35000, '/products/scandinavian/rug (1).jpeg', 'RUG', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (61, 'Oslo Soft Cream Area Rug', 'Ultra-soft low pile area rug in a minimalist cream hue, perfect for cozy spaces.', 28000, '/products/scandinavian/rug (2).jpeg', 'RUG', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (62, 'Stockholm Textured Flatweave Rug', 'Durable flatweave cotton rug featuring subtle monochrome Nordic textures.', 18500, '/products/scandinavian/rug (3).jpeg', 'RUG', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (63, 'Hygge Diamond Knit Rug', 'Cozy diamond-patterned shaggy rug designed to bring warmth into minimalist spaces.', 32000, '/products/scandinavian/rug (4).jpeg', 'RUG', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (64, 'Bergen Neutral Earth Rug', 'Premium organic jute and cotton blend rug with a soft, natural organic finish.', 22000, '/products/scandinavian/rug (5).jpeg', 'RUG', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (65, 'Copenhagen Light Oak Wardrobe', 'Sleek freestanding 2-door wardrobe made from premium solid light oak with soft-close doors.', 85000, '/products/scandinavian/wardrobe (1).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (66, 'Nordic Slatted Wooden Wardrobe', 'Beautiful wardrobe featuring elegant slatted wood detailing and hidden storage shelves.', 92000, '/products/scandinavian/wardrobe (2).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (67, 'Oslo Compact Bedroom Armoire', 'Space-saving wardrobe with minimalist cutout handles and integrated clothing rail.', 68000, '/products/scandinavian/wardrobe (3).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (68, 'Stockholm 3-Door Storage Closet', 'Large Nordic design closet combining high-density matte white panels with wooden legs.', 110000, '/products/scandinavian/wardrobe (4).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (69, 'Freja Glass-Front Oak Wardrobe', 'Sophisticated wardrobe with tinted glass paneling and a premium ash wood structure.', 125000, '/products/scandinavian/wardrobe (5).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (70, 'Lumi Minimalist Open Wardrobe', 'Scandi-style open concept clothing rack with solid wood base drawers for display.', 45000, '/products/scandinavian/wardrobe (6).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (71, 'Bergen White-Washed Birch Wardrobe', 'Bright white-washed finish wooden wardrobe featuring an elegant contemporary silhouette.', 78000, '/products/scandinavian/wardrobe (7).jpeg', 'WARDROBE', 'BEDROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (72, 'Boho Light Brown Wooden Flooring', 'Natural textured light brown wooden flooring panels perfect for a warm bohemian vibe.', 120, '/products/bohemian/flooring(boho)brown (1).jpeg', 'FLOORING', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (73, 'Boho Earthy Plank Flooring', 'Premium grain matte finish wooden flooring with earthy brown undertones.', 150, '/products/bohemian/flooring(boho)brown (2).jpeg', 'FLOORING', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (74, 'Rustic Boho Wood Planks', 'Distressed finish brown wood flooring planks for an authentic artistic interior.', 4900, '/products/bohemian/flooring(boho)brown (3).jpeg', 'DECOR', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (75, 'Sleek Micro-Cement Flooring', 'Seamless architectural micro-cement gray flooring for a sleek, modern touch.', 100, '/products/minimalist/flooring(minimal)cement (4).jpeg', 'FLOORING', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (76, 'Vintage Oak Scandi Flooring', 'Vintage style light blond oak flooring with deep natural grain lines.', 55, '/products/scandinavian/flooring(scandi)light (5).jpeg', 'FLOORING', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (77, 'Cozy Terracotta Brown Wood', 'Warm terracotta shaded smooth wooden planks for a sun-kissed look.', 4800, '/products/bohemian/flooring(boho)brown (6).jpeg', 'DECOR', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (78, 'Natural Ash Nordic Flooring', 'Light-weight natural ash wood flooring panels that elevate indoor lighting.', 80, '/products/scandinavian/flooring(scandi)light (7).jpeg', 'FLOORING', 'LIVING_ROOM', 'SCANDINAVIAN', 'Palette Local'),
+    (79, 'Hand-Scraped Boho Panels', 'Beautiful hand-scraped texture wooden planks for a rugged, textured feel.', 5300, '/products/bohemian/flooring(boho)brown (8).jpeg', 'DECOR', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (80, 'Boho Chic Caramel Floor', 'Smooth caramel-toned protective coat flooring panels for high durability.', 5000, '/products/bohemian/flooring(boho)brown (9).jpeg', 'DECOR', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (81, 'Organic Wheat Minimalist Pine', 'Ultra-clean soft pine wood planks in a bright wheat color to balance minimalist decor.', 100, '/products/minimalist/flooring(minimal)wheat (10).jpeg', 'FLOORING', 'LIVING_ROOM', 'MINIMALIST', 'Palette Local'),
+    (82, 'Patterned Boho Tassel Rug', 'Woven cotton area rug featuring geometric patterns and beautiful edge tassels.', 16500, '/products/bohemian/rug(boho).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (83, 'Rattan Detail Boho Wardrobe', 'Stunning solid wood wardrobe with intricately woven natural rattan door panels.', 88000, '/products/bohemian/Wardrobe(boho) (1).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (84, 'Carved Mandala Wooden Closet', 'Hand-carved mandala design accents on a distressed finish white-washed armoire.', 95000, '/products/bohemian/Wardrobe(boho) (2).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (85, 'Chic Cane-Front Armoire', 'Light tone wardrobe blending contemporary clean borders with organic cane webbing.', 72000, '/products/bohemian/Wardrobe(boho) (3).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (86, 'Rustic Mango Wood Wardrobe', 'Rich sustainable mango wood closet with unique warm grains and iron ring handles.', 115000, '/products/bohemian/Wardrobe(boho) (4).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (87, 'Boho Arch Cabinet Wardrobe', 'Elegant arched top wardrobe with deep shelves and an open aesthetic layout.', 65000, '/products/bohemian/Wardrobe(boho) (5).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (88, 'Sunburst Pattern Boho Armoire', 'Beautifully crafted wardrobe with a radiating wooden sunburst design on the doors.', 98000, '/products/bohemian/Wardrobe(boho) (6).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (89, 'Bohemian Pastel Accent Closet', 'Soft earthy pastel tone wooden wardrobe with brass filigree hardware pulls.', 82000, '/products/bohemian/Wardrobe(boho) (7).jpeg', 'WARDROBE', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (90, 'Boho Rattan Canopy Bed', 'Beautiful low-profile wooden bed with an elegant woven rattan headboard structure.', 78000, '/products/bohemian/bed(boho) (1).jpeg', 'BED', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (91, 'Earthy Macrame Accent Bed', 'Solid oak wood platform bed styled beautifully with textured bohemian fringe layout.', 65000, '/products/bohemian/bed(boho) (2).jpeg', 'BED', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (92, 'Rustic Carved Boho Bed', 'Handcrafted mango wood bed frame featuring unique antique white-washed details.', 89000, '/products/bohemian/bed(boho) (3).jpeg', 'BED', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (93, 'Sun-Kissed Low Profile Bed', 'Minimalist boho style wooden frame closer to the ground for a relaxed bedroom feel.', 52000, '/products/bohemian/bed(boho) (4).jpeg', 'BED', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (94, 'Boho Chic Round Coffee Table', 'Handcrafted solid wood coffee table with distinct radial grain patterns and sleek legs.', 24000, '/products/bohemian/boho(table) (1).jpeg', 'TABLE', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (95, 'Rustic Organic Dining Table', 'Warm distressed wood dining table perfect for seating family and artistic dinnerware.', 5800, '/products/bohemian/boho(table) (2).jpeg', 'TABLE', 'DINING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (96, 'Boho Rattan Accent Chair', 'Handcrafted natural rattan accent chair with a comfy cushion, perfect for a cozy corner.', 18500, '/products/bohemian/chair(boho) (1).jpeg', 'CHAIR', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (97, 'Woven Macrame Swing Chair', 'Beautifully woven macrame hanging chair designed to add a relaxed artistic vibe to any room.', 22000, '/products/bohemian/chair(boho) (2).jpeg', 'CHAIR', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (98, 'Boho Basket Pendant Light', 'Woven natural rattan basket hanging lamp that creates beautiful patterned shadows.', 8500, '/products/bohemian/boho lamp (1).jpeg', 'LAMP', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (99, 'Macrame Tiered Tassel Lamp', 'Stunning fringed cotton macrame chandelier style lamp for a soft, ambient glow.', 9800, '/products/bohemian/boho lamp (2).jpeg', 'LAMP', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (100, 'Earthy Terracotta Table Lamp', 'Rustic handcrafted terracotta clay base lamp with an organic flax linen shade.', 6400, '/products/bohemian/boho lamp (3).jpeg', 'LAMP', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (101, 'Boho Crimson Medallion Rug', 'Traditional bohemian distressed medallion rug with deep crimson and orange tones.', 28000, '/products/bohemian/boho(rug) (1).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (102, 'Earthy Aztec Textured Rug', 'Thick woven cotton rug featuring geometric Aztec patterns and braided fringes.', 19500, '/products/bohemian/boho(rug) (2).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (103, 'Sun-Bleached Vintage Rug', 'Low-pile distressed area rug with faded pastel tones for an authentic vintage boho look.', 24000, '/products/bohemian/boho(rug) (3).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (104, 'Moroccan Shag Boho Rug', 'Ultra-plush cream shaggy rug with charcoal geometric diamond lines.', 32000, '/products/bohemian/boho(rug) (4).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (105, 'Terracotta Mosaic Runner Rug', 'Durable flatweave runner rug in warm rust and terracotta earthy tones.', 15000, '/products/bohemian/boho(rug) (5).jpeg', 'RUG', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (106, 'Boho Chic Rattan Sofa', 'Comfortable bohemian style rattan frame sofa with plush cream cushions.', 85000, '/products/bohemian/boho(sofa) (1).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (107, 'Earthy Textured 3-Seater Sofa', 'Premium textured fabric sofa in warm neutral earthy tones.', 92000, '/products/bohemian/boho(sofa) (2).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (108, 'Terracotta Bohemian Couch', 'Stunning low-profile couch featuring rich terracotta shades.', 78000, '/products/bohemian/boho(sofa) (3).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (109, 'Vintage Tufted Boho Sofa', 'Elegant distressed fabric tufted sofa for a classic artistic vibe.', 95000, '/products/bohemian/boho(sofa) (4).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (110, 'Natural Linen Modular Sofa', 'Flexible modular layout sofa with organic linen woven covers.', 110000, '/products/bohemian/boho(sofa) (5).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (111, 'Cozy Macrame Accent Sofa', 'Sturdy wooden frame couch finished with subtle macrame fringe details.', 88000, '/products/bohemian/boho(sofa) (6).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (112, 'Sun-Kissed Golden Velvet Sofa', 'Luxurious soft velvet fabric sofa bringing warmth to bohemian layouts.', 98000, '/products/bohemian/boho(sofa) (7).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (113, 'Rustic Sandstone Sectional Sofa', 'Large deep-seat sectional sofa perfect for artistic living spaces.', 125000, '/products/bohemian/boho(sofa) (8).jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (114, 'Boho Patio Woven Sofa', 'Weather-resistant bohemian woven sofa ideal for balconies or patios.', 65000, '/products/bohemian/boho(sofa) patio.jpeg', 'SOFA', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (115, 'Boho Botanical Leaves Wallpaper', 'Beautiful organic leaf patterns in soft terracotta and beige tones.', 120, '/products/bohemian/bohowallpaper(patterns) (1).jpeg', 'WALLPAPER', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (116, 'Abstract Geometric Boho Wallpaper', 'Minimalist lines and artistic shapes wallpaper for modern boho rooms.', 150, '/products/bohemian/bohowallpaper(patterns) (2).jpeg', 'WALLPAPER', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (117, 'Earthy Sunburst Pattern Wallpaper', 'Warm sunburst repeating prints creating a cozy sun-kissed aesthetic wall.', 55, '/products/bohemian/bohowallpaper(patterns) (3).jpeg', 'WALLPAPER', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (118, 'Textured Macrame Look Wallpaper', 'Faux textured pattern wallpaper replicating handwoven bohemian art.', 80, '/products/bohemian/bohowallpaper(patterns) (4).jpeg', 'WALLPAPER', 'BEDROOM', 'BOHEMIAN', 'Palette Local'),
+    (119, 'Vintage Pastel Mandala Wallpaper', 'Soft faded mandala medallion patterns for a relaxing artistic backdrop.', 100, '/products/bohemian/bohowallpaper(patterns) (5).jpeg', 'WALLPAPER', 'LIVING_ROOM', 'BOHEMIAN', 'Palette Local'),
+    (120, 'Boho Woven Rattan Kitchen Basket', 'Handwoven rattan fruit and bread basket with rustic boho charm.', 3200, '/products/bohemian/kitchen(boho) (1).jpeg', 'DECOR', 'KITCHEN', 'BOHEMIAN', 'Palette Local'),
+    (121, 'Rustic Boho Kitchen Table', 'Warm distressed wood kitchen table with earthy macrame detail legs.', 45000, '/products/bohemian/kitchen(boho) (2).jpeg', 'TABLE', 'KITCHEN', 'BOHEMIAN', 'Palette Local'),
+    (122, 'Boho Seagrass Kitchen Pendant Lamp', 'Woven seagrass pendant light casting warm patterned shadows overhead.', 7800, '/products/bohemian/kitchen(boho) (3).jpeg', 'LAMP', 'KITCHEN', 'BOHEMIAN', 'Palette Local');
+
+-- Move the identity counters past the seeded IDs so new rows don't collide.
+ALTER TABLE aesthetic_styles ALTER COLUMN id RESTART WITH 4;
+ALTER TABLE designers        ALTER COLUMN id RESTART WITH 7;
+ALTER TABLE products         ALTER COLUMN id RESTART WITH 123;

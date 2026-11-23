@@ -48,7 +48,7 @@ public class FurnitureBundle implements InventoryItem {
     @Column(nullable = false)
     private Double discountFactor = 1.0;
 
-    @Column(nullable = false)
+    @Column(name = "total_price_pkr", nullable = false)
     private Double totalPriceInPKR = 0.0;
 
     public enum RoomType {

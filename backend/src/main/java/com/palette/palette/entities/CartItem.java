@@ -38,7 +38,7 @@ public class CartItem {
     @Column(nullable = false)
     private Integer quantity = 1;
 
-    @Column(nullable = false)
+    @Column(name = "unit_price_pkr", nullable = false)
     private Double unitPrice = 0.0;
 
     public enum ItemType {

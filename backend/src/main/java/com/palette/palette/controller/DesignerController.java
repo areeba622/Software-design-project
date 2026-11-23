@@ -3,7 +3,6 @@ package com.palette.palette.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,7 +16,6 @@ import com.palette.palette.services.DesignerService;
  */
 @RestController
 @RequestMapping("/api/designers")
-@CrossOrigin(origins = "http://localhost:5173") // <--- YEH LINE ZAROOR ADD KAREIN!
 public class DesignerController {
 
     private final DesignerService designerService;
