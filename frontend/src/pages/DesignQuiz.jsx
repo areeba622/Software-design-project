@@ -8,7 +8,9 @@ import {
   FaDoorClosed, FaImage, FaPalette,
 } from 'react-icons/fa'
 
-import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
+import { cartApi, quizApi } from '../api'
+import { useAuth } from '../auth/AuthContext'
+import { useCurrency } from '../lib/CurrencyContext'
 
 const T = {
   ink: "#0F172A",
@@ -124,10 +126,6 @@ const CATEGORY_ICONS = {
   FLOORING: FaLayerGroup, WALLPAPER: FaImage, DECOR: FaPalette,
 }
 
-function formatPrice(pkr, currency) {
-  if (currency === 'USD') return `$${(pkr / 280).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  return `PKR ${pkr?.toLocaleString('en-PK')}`
-}
 
 function deriveStyle(answers) {
   const scores = { BOHEMIAN: 0, SCANDINAVIAN: 0, MINIMALIST: 0 }
@@ -349,7 +347,7 @@ function QuizQuestionScreen({ q, index, total, answers, onAnswer, onNext }) {
 
 // ─── Style reveal screen ──────────────────────────────────────────────────────
 
-function StyleReveal({ style, answers, onContinue }) {
+function StyleReveal({ style, onContinue }) {
   const meta = STYLE_META[style]
   const [selectedRoom, setSelectedRoom] = useState(null)
 
@@ -509,8 +507,9 @@ function StyleReveal({ style, answers, onContinue }) {
 
 // ─── Recommendation view — playful pop-in products ─────────────────────────────
 
-function RecommendationView({ recommendation, style, room, user, onBack, onGoHome }) {
-  const currency = user?.currencyPreference || 'PKR'
+function RecommendationView({ recommendation, style, room, onBack, onGoHome }) {
+  const { user } = useAuth()
+  const { format: formatMoney } = useCurrency()
   const meta = STYLE_META[style]
   const bundle = recommendation.recommendedBundle || recommendation.styleBundle
   const products = recommendation.bundleProducts || recommendation.recommendedProducts || []
@@ -535,11 +534,7 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
     if (!user) { showMsg('Please log in to add items to cart.', false); return }
     setAddingToCart(product.id)
     try {
-      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
-        method: 'POST',
-        body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: 'PRODUCT' }),
-      })
-      if (!res.ok) throw new Error()
+      await cartApi.add({ itemId: product.id })
       setAddedIds(ids => [...ids, product.id])
       showMsg(`${product.name} added to cart!`)
       // Tiny burst right at the button for extra "yes!" feedback
@@ -553,11 +548,7 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
     setAddingToCart('all')
     try {
       for (const p of products) {
-        const res = await authFetch(API_ENDPOINTS.CART_ADD, {
-          method: 'POST',
-          body: JSON.stringify({ itemId: p.id, quantity: 1, itemType: 'PRODUCT' }),
-        })
-        if (!res.ok) throw new Error()
+        await cartApi.add({ itemId: p.id })
       }
       setAddedIds(products.map(p => p.id))
       showMsg(`All ${products.length} products added!`)
@@ -605,7 +596,7 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
             {total != null && (
               <div>
                 <p style={{ fontFamily: FONT, fontSize: 11, color: T.stone, margin: '0 0 2px' }}>Bundle price</p>
-                <p style={{ fontFamily: FONT, fontSize: '1.3rem', fontWeight: 800, color: T.ink, margin: 0, letterSpacing: '-0.02em' }}>{formatPrice(total, currency)}</p>
+                <p style={{ fontFamily: FONT, fontSize: '1.3rem', fontWeight: 800, color: T.ink, margin: 0, letterSpacing: '-0.02em' }}>{formatMoney(total)}</p>
               </div>
             )}
             {discount != null && discount < 1 && (
@@ -689,7 +680,7 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
                   <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
                     <p style={{ fontFamily: FONT, fontWeight: 700, fontSize: 12, color: T.ink, margin: 0 }}>{p.name}</p>
                     <p style={{ fontFamily: FONT, fontSize: 11, color: T.stone, margin: 0 }}>{p.category}</p>
-                    <p style={{ fontFamily: FONT, fontWeight: 800, fontSize: 13, color: T.ink, margin: 0 }}>{formatPrice(p.priceInPKR, currency)}</p>
+                    <p style={{ fontFamily: FONT, fontWeight: 800, fontSize: 13, color: T.ink, margin: 0 }}>{formatMoney(p.priceInPKR)}</p>
                     <motion.button
                       onClick={() => addOne(p)} disabled={!!addingToCart || isAdded}
                       whileHover={{ scale: isAdded ? 1 : 1.03 }} whileTap={{ scale: 0.96 }}
@@ -739,7 +730,7 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
 
 // ─── Main quiz component ──────────────────────────────────────────────────────
 
-export default function DesignQuiz({ user, onBack }) {
+export default function DesignQuiz({ onBack }) {
   const TOTAL = QUESTIONS.length
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState({})
@@ -788,13 +779,8 @@ export default function DesignQuiz({ user, onBack }) {
     setError(null)
     setSelectedRoom(room)
     try {
-      // Logged-in users send their token so the result is saved to their profile.
-      const res = await authFetch(API_ENDPOINTS.QUIZ_SUBMIT, {
-        method: 'POST',
-        body: JSON.stringify({ style, roomType: room }),
-      })
-      if (!res.ok) throw new Error(await errorMessage(res, 'Could not get your recommendations.'))
-      const data = await res.json()
+      // Sent with the login token, so the result is saved to the user's profile.
+      const data = await quizApi.submit(style, room)
       setRecommendation(data)
       setPhase('recommendation')
     } catch (e) {
@@ -885,7 +871,7 @@ export default function DesignQuiz({ user, onBack }) {
                     {error}
                   </div>
                 )}
-                <StyleReveal style={derivedStyle} answers={answers} onContinue={submitQuiz} />
+                <StyleReveal style={derivedStyle} onContinue={submitQuiz} />
               </>
             )}
           </motion.div>
@@ -901,7 +887,6 @@ export default function DesignQuiz({ user, onBack }) {
               recommendation={recommendation}
               style={derivedStyle}
               room={selectedRoom}
-              user={user}
               onBack={resetQuiz}
               onGoHome={onBack}
             />

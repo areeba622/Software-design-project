@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronLeft, FiDollarSign, FiAward, FiClock } from 'react-icons/fi'
-import { API_ENDPOINTS } from '../config/api'
+import { designersApi } from '../api'
+import { useCurrency } from '../lib/CurrencyContext'
 
 // Premium Theme Constants matching Quiz exactly
 const T = {
@@ -15,6 +16,7 @@ const T = {
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
 
 export default function DesignersPage({ onBack }) {
+  const { format } = useCurrency()
   const [designers, setDesigners] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -23,13 +25,15 @@ export default function DesignersPage({ onBack }) {
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    fetch(API_ENDPOINTS.DESIGNERS)
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to fetch')
-        return r.json()
-      })
+    const controller = new AbortController()
+    designersApi.list({ signal: controller.signal })
       .then(data => { setDesigners(data); setLoading(false) })
-      .catch(() => { setError('Could not load designers. Please ensure the backend is running.'); setLoading(false) })
+      .catch(e => {
+        if (e.name === 'AbortError') return
+        setError(e.message)
+        setLoading(false)
+      })
+    return () => controller.abort()
   }, [])
 
   const styleOptions = ['ALL', 'MINIMALIST', 'BOHEMIAN', 'SCANDINAVIAN']
@@ -222,7 +226,7 @@ export default function DesignersPage({ onBack }) {
                 <div style={{ borderTop: `1px solid ${T.warm}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <p style={{ margin: 0, fontSize: 10, color: T.stone, fontWeight: 600 }}>HOURLY RATE</p>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>PKR {d.hourlyRatePKR?.toLocaleString('en-PK')}</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>{format(d.hourlyRatePKR)}</p>
                   </div>
                   <button style={{ background: T.ink, color: T.white, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                     View Profile
@@ -266,7 +270,7 @@ export default function DesignersPage({ onBack }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: T.linen, padding: 14, borderRadius: 12, border: `1px solid ${T.warm}` }}>
                   <div>
                     <span style={{ fontSize: 10, color: T.stone, display: 'block', fontWeight: 600 }}>CONSULTATION</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>PKR {selected.hourlyRatePKR?.toLocaleString()}/hr</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{format(selected.hourlyRatePKR)}/hr</span>
                   </div>
                   <div>
                     <span style={{ fontSize: 10, color: T.stone, display: 'block', fontWeight: 600 }}>EXPERIENCE</span>

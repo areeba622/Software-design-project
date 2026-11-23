@@ -1,9 +1,15 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowLeft } from "react-icons/fi"
-import { API_ENDPOINTS } from "../config/api"
+import { useLocation, useNavigate } from "react-router-dom"
+import { useAuth } from "../auth/AuthContext"
 
-export default function Login({ onSwitch, onBack, onSuccess }) {
+export default function Login() {
+  const { login } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const onBack = () => navigate("/")
+  const onSwitch = () => navigate("/register", { state: location.state })
   const [form, setForm] = useState({ email: "", password: "" })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -17,20 +23,7 @@ export default function Login({ onSwitch, onBack, onSuccess }) {
     setMsg(null)
     
     try {
-      const res = await fetch(API_ENDPOINTS.LOGIN, {
-        method: "POST", 
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      })
-      
-      const data = await res.json()
-      
-      if (!res.ok) throw new Error(data.message || "Login failed")
-      
-      if (onSuccess) {
-        onSuccess(data)
-      }
-      
+      await login(form.email, form.password) // GuestOnlyRoute then sends the user on
     } catch (err) { 
       setMsg({ ok: false, text: err.message }) 
     } finally { 

@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
-import { API_ENDPOINTS, authFetch, errorMessage } from "../config/api"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { cartApi, productsApi } from "../api"
+import { useAuth } from "../auth/AuthContext"
+import { useCurrency } from "../lib/CurrencyContext"
 import { motion, AnimatePresence, useInView } from "framer-motion"
 import {
   FiSearch, FiShoppingCart, FiX, FiChevronDown, FiLogOut, FiGrid, FiMenu
@@ -33,13 +35,6 @@ const PRICE_CAPS = [
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function formatPrice(pkr, currency) {
-  if (currency === "USD") {
-    const usd = pkr / 280
-    return `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-  return `PKR ${pkr?.toLocaleString("en-PK")}`
-}
 
 function categoryLabel(cat) {
   if (!cat) return ""
@@ -316,7 +311,8 @@ function Dropdown({ label, value, options, onChange }) {
 }
 
 // ─── Micro-Interacted Product Card ───────────────────────────────────────────
-function ProductCard({ product, currency, onAddToCart, index }) {
+function ProductCard({ product, onAddToCart, index }) {
+  const { format } = useCurrency()
   const ref = useRef(null)
   const navigate = useNavigate()
   const inView = useInView(ref, { once: true, margin: "-40px" })
@@ -399,7 +395,7 @@ function ProductCard({ product, currency, onAddToCart, index }) {
 
         <div style={{ marginTop: "auto", paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px dashed ${C.gridLine}` }}>
           <span style={{ fontFamily: FONT, fontSize: 16, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>
-            {formatPrice(product.priceInPKR, currency)}
+            {format(product.priceInPKR)}
           </span>
 
           <motion.button
@@ -441,7 +437,8 @@ function EmptyState({ hasFilters, onClear }) {
 }
 
 // ─── Cart Drawer Component ───────────────────────────────────────────────────
-function CartDrawer({ open, user, currency, onClose, onCheckout }) {
+function CartDrawer({ open, onClose, onCheckout }) {
+  const { format } = useCurrency()
   const [cart, setCart] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -451,15 +448,13 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
       setCart(null)
       return
     }
-    // ✅ FIX 2: Only fetch from DB when drawer opens (cart is null after reset)
-    if (!user) return
+    // Only fetch when the drawer opens (cart is null after reset)
     setLoading(true)
-    authFetch(API_ENDPOINTS.CART)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => setCart(d))
+    cartApi.get()
+      .then(setCart)
       .catch(() => setCart(null))
       .finally(() => setLoading(false))
-  }, [open, user])
+  }, [open])
 
   // Remove right away in the UI, then use the server's updated cart (or reload it if the delete failed).
   const removeItem = async (cartItemId) => {
@@ -471,10 +466,9 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
         .reduce((sum, l) => sum + l.lineTotal, 0)
     }))
     try {
-      const res = await authFetch(API_ENDPOINTS.CART_REMOVE(cartItemId), { method: "DELETE" })
-      const fresh = res.ok ? await res.json() : await (await authFetch(API_ENDPOINTS.CART)).json()
-      setCart(fresh)
+      setCart(await cartApi.remove(cartItemId))
     } catch {
+      cartApi.get().then(setCart).catch(() => {})
       // keep the optimistic state; the next open re-fetches the cart
     }
   }
@@ -515,11 +509,11 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontFamily: FONT, fontWeight: 700, fontSize: 13, color: C.ink, margin: "0 0 3px", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{line.itemName}</p>
                     <p style={{ fontFamily: FONT, fontSize: 12, color: C.pastelMuted, margin: 0, fontWeight: 500 }}>
-                      Qty: {line.quantity} · {formatPrice(line.unitPrice, currency)}
+                      Qty: {line.quantity} · {format(line.unitPrice)}
                     </p>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span style={{ fontFamily: FONT, fontWeight: 800, fontSize: 13, color: C.ink }}>{formatPrice(line.lineTotal, currency)}</span>
+                    <span style={{ fontFamily: FONT, fontWeight: 800, fontSize: 13, color: C.ink }}>{format(line.lineTotal)}</span>
                     <button onClick={() => removeItem(line.cartItemId)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 2, display: 'flex' }}>
                       <FiX size={14} />
                     </button>
@@ -532,7 +526,7 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
               <div style={{ padding: "20px 24px", borderTop: `1px solid ${C.gridLine}`, background: C.creamBg }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, alignItems: 'center' }}>
                   <span style={{ fontFamily: FONT, fontSize: 14, color: C.pastelMuted, fontWeight: 600 }}>Grand total</span>
-                  <span style={{ fontFamily: FONT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.02em' }}>{formatPrice(cart.grandTotal, currency)}</span>
+                  <span style={{ fontFamily: FONT, fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: '-0.02em' }}>{format(cart.grandTotal)}</span>
                 </div>
                 <motion.button
                   onClick={() => onCheckout(cart)}
@@ -552,113 +546,84 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
 
 // ─── Main Catalog Page Export ────────────────────────────────────────────────
 export default function ProductCatalog({
-  user, onBack, onLogout, onRoomBuilder, onCheckout, onQuiz, onNavigate,
-  currency: currencyProp, initialRoomFilter, initialCategoryFilter, initialStyleFilter,
-  pageTitle, pageSubtitle,
+  onBack, onLogout, onRoomBuilder, onCheckout,
+  defaultCategory, pageTitle, pageSubtitle,
 }) {
-  const currency = currencyProp || user?.currencyPreference || "PKR"
+  const { user } = useAuth()
 
-  const [products, setProducts] = useState([])
+  // Filters live in the URL (?q=&category=&room=&style=&maxPrice=) so a filtered
+  // view can be shared, bookmarked, and survives a refresh.
+  const [params, setParams] = useSearchParams()
+  const search = params.get("q") || ""
+  const category = params.get("category") || defaultCategory || "ALL"
+  const roomType = params.get("room") || "ALL"
+  const style = params.get("style") || "ALL"
+  const maxPrice = Number(params.get("maxPrice")) || null
+
+  const setFilter = (key) => (value) =>
+    setParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (value === null || value === undefined || value === "" || value === "ALL") next.delete(key)
+      else next.set(key, value)
+      return next
+    }, { replace: true })
+  const setSearch = setFilter("q")
+  const setCategory = setFilter("category")
+  const setRoomType = setFilter("room")
+  const setStyle = setFilter("style")
+  const setMaxPrice = setFilter("maxPrice")
+
+  const [allProducts, setAllProducts] = useState([])
+  const [reloadKey, setReloadKey] = useState(0) // bump to re-fetch after an error
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-
-  const [search, setSearch] = useState("")
-  const [category, setCategory] = useState(initialCategoryFilter || "ALL")
-  const [roomType, setRoomType] = useState(initialRoomFilter || "ALL")
-  const [style, setStyle] = useState(initialStyleFilter || "ALL")
-  const [maxPrice, setMaxPrice] = useState(null)
-
-  // initialRoomFilter / initialCategoryFilter / initialStyleFilter only seed
-  // state on first render (useState's initializer runs once). If the parent
-  // route stays mounted and just updates these props — e.g. clicking
-  // "View Recommendations" from the Dashboard without a full navigation
-  // remount — this syncs the filters instead of silently ignoring the new
-  // value.
-  useEffect(() => {
-    if (initialRoomFilter) setRoomType(initialRoomFilter)
-  }, [initialRoomFilter])
-  useEffect(() => {
-    if (initialCategoryFilter) setCategory(initialCategoryFilter)
-  }, [initialCategoryFilter])
-  useEffect(() => {
-    if (initialStyleFilter) setStyle(initialStyleFilter)
-  }, [initialStyleFilter])
 
   const [cartOpen, setCartOpen] = useState(false)
   const [cartCount, setCartCount] = useState(0)
   const [addError, setAddError] = useState(null)
 
-  const searchTimeout = useRef(null)
-
-  const fetchProducts = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      // The server does the text search; every other filter is applied here so they
-      // all combine (before, picking a price cap silently dropped the category filter).
-      const url = search.trim() ? API_ENDPOINTS.PRODUCTS_SEARCH(search.trim()) : API_ENDPOINTS.PRODUCTS
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(await errorMessage(res, "Failed to load products"))
-      let data = await res.json()
-
-      if (category !== "ALL") data = data.filter(p => p.category === category)
-      if (roomType !== "ALL") data = data.filter(p => p.roomType === roomType)
-      if (style !== "ALL") data = data.filter(p => p.aestheticStyle === style)
-      if (maxPrice) data = data.filter(p => p.priceInPKR <= maxPrice)
-
-      setProducts(data)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // The server does the text search (debounced while typing); every other
+  // filter is applied below so they all combine.
   useEffect(() => {
-    clearTimeout(searchTimeout.current)
-    searchTimeout.current = setTimeout(fetchProducts, search ? 400 : 0)
-    return () => clearTimeout(searchTimeout.current)
-  }, [search, category, roomType, style, maxPrice])
+    const controller = new AbortController()
+    const keyword = search.trim()
+    const timer = setTimeout(() => {
+      setLoading(true)
+      setError(null)
+      const call = keyword ? productsApi.search(keyword, { signal: controller.signal }) : productsApi.list({ signal: controller.signal })
+      call
+        .then(setAllProducts)
+        .catch(e => { if (e.name !== "AbortError") setError(e.message) })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    }, keyword ? 400 : 0)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [search, reloadKey])
 
-  const refreshCartCount = async () => {
-    if (!user) return
-    try {
-      const res = await authFetch(API_ENDPOINTS.CART)
-      if (!res.ok) return
-      const d = await res.json()
-      setCartCount(d?.lines?.length || 0)
-    } catch (_) { }
-  }
+  const products = useMemo(() => allProducts.filter(p =>
+    (category === "ALL" || p.category === category) &&
+    (roomType === "ALL" || p.roomType === roomType) &&
+    (style === "ALL" || p.aestheticStyle === style) &&
+    (!maxPrice || p.priceInPKR <= maxPrice)
+  ), [allProducts, category, roomType, style, maxPrice])
+
+  const refreshCartCount = () =>
+    cartApi.get().then(cart => setCartCount(cart?.lines?.length || 0)).catch(() => {})
 
   useEffect(() => { refreshCartCount() }, [])
 
   const addToCart = async (product) => {
-    if (!user) {
-      setAddError("Please log in to add items to cart.")
-      return
-    }
     setAddError(null)
     try {
-      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
-        method: "POST",
-        body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: "PRODUCT" }),
-      })
-      if (!res.ok) throw new Error(await errorMessage(res, "Could not add item"))
-      refreshCartCount()
+      const cart = await cartApi.add({ itemId: product.id })
+      setCartCount(cart?.lines?.length || 0)
     } catch (e) {
       setAddError(e.message)
     }
   }
 
-  const clearFilters = () => {
-    setSearch("")
-    setCategory("ALL")
-    setRoomType("ALL")
-    setStyle("ALL")
-    setMaxPrice(null)
-  }
+  const clearFilters = () => setParams({}, { replace: true })
 
-  const hasFilters = search || category !== "ALL" || roomType !== "ALL" || style !== "ALL" || maxPrice
+  const hasFilters = search || category !== (defaultCategory || "ALL") || roomType !== "ALL" || style !== "ALL" || maxPrice
 
   const roomDropdownOptions = ROOM_TYPES.map(r => ({ label: r === "ALL" ? "All rooms" : roomLabel(r), value: r }))
   const styleDropdownOptions = STYLES.map(s => ({ label: s === "ALL" ? "All styles" : s.charAt(0) + s.slice(1).toLowerCase(), value: s }))
@@ -805,7 +770,7 @@ export default function ProductCatalog({
 
         {!loading && error && (
           <div style={{ textAlign: "center", padding: "5rem 2rem", fontFamily: FONT, color: "#B91C1C", fontSize: 14, fontWeight: 500 }}>
-            {error} — <button onClick={fetchProducts} style={{ background: "none", border: "none", color: C.clay, cursor: "pointer", fontWeight: 700, fontFamily: FONT, textDecoration: 'underline' }}>Retry handshake</button>
+            {error} — <button onClick={() => setReloadKey(k => k + 1)} style={{ background: "none", border: "none", color: C.clay, cursor: "pointer", fontWeight: 700, fontFamily: FONT, textDecoration: 'underline' }}>Try again</button>
           </div>
         )}
 
@@ -818,7 +783,6 @@ export default function ProductCatalog({
                 <ProductCard
                   key={p.id}
                   product={p}
-                  currency={currency}
                   onAddToCart={addToCart}
                   index={i}
                 />
@@ -831,8 +795,6 @@ export default function ProductCatalog({
 
       <CartDrawer
         open={cartOpen}
-        user={user}
-        currency={currency}
         onClose={() => setCartOpen(false)}
         onCheckout={(cart) => {
           setCartOpen(false)

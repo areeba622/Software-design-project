@@ -136,7 +136,7 @@ class RoomAndQuizTest {
         designQuizService.submitQuiz("MINIMALIST", "KITCHEN", userId);
         designQuizService.submitQuiz("BOHEMIAN", "BEDROOM", userId);
 
-        DesignQuizResponseDTO latest = designQuizService.getLatestRecommendation(userId);
+        DesignQuizResponseDTO latest = designQuizService.getLatestRecommendation(userId).orElseThrow();
 
         assertThat(latest.getAestheticStyle()).isEqualTo("BOHEMIAN");
         assertThat(latest.getRoomType()).isEqualTo("BEDROOM");
@@ -146,7 +146,6 @@ class RoomAndQuizTest {
     void guestQuizIsNotSavedAndNoLatestExists() {
         designQuizService.submitQuiz("MINIMALIST", "KITCHEN", null);
 
-        assertThatThrownBy(() -> designQuizService.getLatestRecommendation(userId))
-                .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(designQuizService.getLatestRecommendation(userId)).isEmpty();
     }
 }

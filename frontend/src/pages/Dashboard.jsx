@@ -10,7 +10,10 @@ import {
   FiArrowRight,
   FiPackage,
 } from 'react-icons/fi'
-import { API_ENDPOINTS, authFetch } from '../config/api'
+import { useNavigate } from 'react-router-dom'
+import { cartApi, ordersApi, productsApi, quizApi } from '../api'
+import { useAuth } from '../auth/AuthContext'
+import { useCurrency } from '../lib/CurrencyContext'
 import PaletteLogoFan from '../components/PaletteLogoFan'
 
 
@@ -246,7 +249,7 @@ function WelcomeHeader({ user, greeting, greetingEmoji, cartCount, orderCount, l
     >
       <div>
         <h1 className="font-display text-[clamp(1.6rem,3.4vw,2.2rem)] text-[#2B2420] mb-1.5">
-          Welcome back, {user?.fullName?.split(' ')[0]} {greetingEmoji}
+          {greeting}, {user?.fullName?.split(' ')[0]} {greetingEmoji}
         </h1>
         <p className="text-[13px] text-[#6D6259]">
           Ready to design your perfect space?
@@ -390,6 +393,7 @@ function InteriorStyleCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RecommendedProducts({ products, loading, onNavigate, onViewAll }) {
+  const { format } = useCurrency()
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
@@ -441,7 +445,7 @@ function RecommendedProducts({ products, loading, onNavigate, onViewAll }) {
                 </div>
                 <p className="text-[12px] font-bold text-[#2B2420] truncate">{p.name}</p>
                 <p className="text-[11px] text-[#756A61]">
-                  {p.priceInPKR != null ? `PKR ${Number(p.priceInPKR).toLocaleString('en-PK')}` : ''}
+                  {p.priceInPKR != null ? format(p.priceInPKR) : ''}
                 </p>
               </button>
             ))
@@ -622,7 +626,9 @@ function QuickActions({ onNavigate }) {
 // MAIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleFilter }) {
+export default function Dashboard({ onNavigate, onLogout }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [cartCount, setCartCount] = useState(0)
   const [orderCount, setOrderCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -639,25 +645,32 @@ export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleF
 
   // Cart + orders
   useEffect(() => {
-    if (!user) return
+    const controller = new AbortController()
     Promise.all([
-      authFetch(API_ENDPOINTS.CART).then(r => (r.ok ? r.json() : null)).catch(() => null),
-      authFetch(API_ENDPOINTS.ORDERS).then(r => (r.ok ? r.json() : [])).catch(() => []),
+      cartApi.get({ signal: controller.signal }).catch(() => null),
+      ordersApi.list({ signal: controller.signal }).catch(() => []),
     ]).then(([cart, orders]) => {
+      if (controller.signal.aborted) return
       setCartCount(cart?.lines?.length || 0)
       setOrderCount(Array.isArray(orders) ? orders.length : 0)
-    }).finally(() => setLoading(false))
-  }, [user])
+      setLoading(false)
+    })
+    return () => controller.abort()
+  }, [])
 
   // Latest quiz result
+  // (null when the user hasn't taken the quiz yet)
   useEffect(() => {
-    if (!user) return
-    authFetch(API_ENDPOINTS.QUIZ_LATEST)
-      .then(r => (r.ok ? r.json() : null))
-      .then(setLatestQuiz)
-      .catch(() => setLatestQuiz(null))
-      .finally(() => setQuizLoading(false))
-  }, [user])
+    const controller = new AbortController()
+    quizApi.latest({ signal: controller.signal })
+      .catch(() => null)
+      .then(quiz => {
+        if (controller.signal.aborted) return
+        setLatestQuiz(quiz)
+        setQuizLoading(false)
+      })
+    return () => controller.abort()
+  }, [])
 
   // Recommended products — waits for the quiz result so it can filter by
   // aestheticStyle when one exists; api.js has no dedicated recommendations
@@ -665,8 +678,7 @@ export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleF
   // client-side, same approach ProductCatalog.jsx already uses.
   useEffect(() => {
     if (quizLoading) return
-    fetch(API_ENDPOINTS.PRODUCTS)
-      .then(r => r.json())
+    productsApi.list()
       .then(data => {
         let list = Array.isArray(data) ? data : []
         if (latestQuiz?.aestheticStyle) {
@@ -687,10 +699,9 @@ export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleF
   // quiz yet, latestQuiz is null and this just behaves like a plain link to
   // the unfiltered catalogue.
   const handleViewStyleInCatalog = () => {
-    if (latestQuiz?.aestheticStyle) {
-      setCatalogStyleFilter?.(latestQuiz.aestheticStyle)
-    }
-    onNavigate('catalog')
+    // The filter travels in the URL, so it also survives a page refresh.
+    const style = latestQuiz?.aestheticStyle && latestQuiz.aestheticStyle !== 'NONE' ? latestQuiz.aestheticStyle : null
+    navigate(style ? `/catalog?style=${style}` : '/catalog')
   }
 
   return (

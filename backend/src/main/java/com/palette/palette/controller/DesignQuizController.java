@@ -1,6 +1,7 @@
 package com.palette.palette.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,9 +32,11 @@ public class DesignQuizController {
         return designQuizService.submitQuiz(dto.getStyle(), dto.getRoomType(), userId);
     }
 
-    /** The recommendation from the user's most recent quiz (404 if they haven't taken it). */
+    /** The recommendation from the user's most recent quiz, or 204 No Content if they haven't taken it. */
     @GetMapping("/latest")
-    public DesignQuizResponseDTO getLatestQuiz(@CurrentUserId Long userId) {
-        return designQuizService.getLatestRecommendation(userId);
+    public ResponseEntity<DesignQuizResponseDTO> getLatestQuiz(@CurrentUserId Long userId) {
+        return designQuizService.getLatestRecommendation(userId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

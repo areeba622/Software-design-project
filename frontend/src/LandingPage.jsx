@@ -277,7 +277,7 @@ function DesignerDeckCard({ d, isActive, onSelect }) {
 // ==========================================
 // MAIN LANDING PAGE COMPONENT
 // ==========================================
-export default function LandingPage({ onQuiz, onLogin, onRegister, onRoomBuilder }) {
+export default function LandingPage({ onQuiz, onLogin }) {
   const navigate = useNavigate();
   const heroRef = useRef(null);
 
@@ -286,7 +286,6 @@ export default function LandingPage({ onQuiz, onLogin, onRegister, onRoomBuilder
   // sitting over the dark hero photo.
   const [scrolled, setScrolled] = useState(false);
   const [pastHero, setPastHero] = useState(false);
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 40);
@@ -297,7 +296,6 @@ export default function LandingPage({ onQuiz, onLogin, onRegister, onRoomBuilder
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-  const handleHeroMouseMove = (e) => { setMouse({ x: (e.clientX / window.innerWidth) - 0.5, y: (e.clientY / window.innerHeight) - 0.5 }); };
   // Interactive quiz teaser state
   const [selectedStyle, setSelectedStyle] = useState(null);
   const activeStyle = styleOptions.find((s) => s.id === selectedStyle);
@@ -361,7 +359,7 @@ export default function LandingPage({ onQuiz, onLogin, onRegister, onRoomBuilder
       {/* ═══════════════════════════════════════════════
           1. HERO SECTION
       ═══════════════════════════════════════════════ */}
-      <header ref={heroRef} onMouseMove={handleHeroMouseMove} className="relative h-[90vh] w-full flex items-center justify-center bg-[#F4F1EA] overflow-hidden group">
+      <header ref={heroRef} className="relative h-[90vh] w-full flex items-center justify-center bg-[#F4F1EA] overflow-hidden group">
         <motion.div>
           <SafeImage src={backgroundPic} alt="Warm terracotta living room with natural fabrics" />
         </motion.div>

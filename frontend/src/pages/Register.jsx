@@ -1,9 +1,14 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { FiMail, FiLock, FiUser, FiEye, FiEyeOff } from "react-icons/fi"
-import { API_ENDPOINTS } from "../config/api"
+import { useLocation, useNavigate } from "react-router-dom"
+import { useAuth } from "../auth/AuthContext"
 
-export default function Register({ onSwitch, onBack, onSuccess }) {
+export default function Register() {
+  const { register } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const onSwitch = () => navigate("/login", { state: location.state })
   const [form, setForm] = useState({ fullName: "", email: "", password: "", currencyPreference: "PKR" })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -16,17 +21,7 @@ export default function Register({ onSwitch, onBack, onSuccess }) {
     setLoading(true)
     setMsg(null)
     try {
-      const res = await fetch(API_ENDPOINTS.REGISTER, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "Registration failed")
-      setMsg({ ok: true, text: `Account created! Welcome, ${data.fullName}.` })
-      if (onSuccess) {
-        setTimeout(() => onSuccess(data), 800)
-      }
+      await register(form) // GuestOnlyRoute then sends the user on
     } catch (err) {
       setMsg({ ok: false, text: err.message })
     } finally {

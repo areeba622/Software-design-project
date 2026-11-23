@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiPackage, FiChevronDown } from 'react-icons/fi'
-import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
+import { ordersApi } from '../api'
+import { useCurrency } from '../lib/CurrencyContext'
 
 // ─── Design Tokens (matching PaymentPage.jsx) ─────────────────────────────────
 const T = {
@@ -24,9 +25,6 @@ const STATUS_STYLES = {
     CANCELLED: { bg: '#FEE2E2', fg: '#B91C1C' },
 }
 
-function fmtPKR(n) {
-    return `PKR ${Number(n ?? 0).toLocaleString("en-PK")}`
-}
 
 function fmtDate(iso) {
     if (!iso) return '—'
@@ -59,6 +57,7 @@ function StatusBadge({ status }) {
 
 // ─── Order Card (collapsible) ──────────────────────────────────────────────────
 function OrderCard({ order, index }) {
+    const { format: fmtPKR } = useCurrency()
     const [open, setOpen] = useState(false)
     const itemCount = order.items?.length || 0
     const summary = order.items?.length
@@ -171,37 +170,19 @@ function OrderCard({ order, index }) {
 }
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────────
-export default function Orders({ user, onBack }) {
+export default function Orders({ onBack }) {
     const [orders, setOrders] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
-        if (!user) return
-        let cancelled = false
-
-        const fetchOrders = async () => {
-            try {
-                const res = await authFetch(API_ENDPOINTS.ORDERS)
-                if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your orders.'))
-                const data = await res.json()
-                if (!cancelled) {
-                    // Most recent first
-                    const sorted = [...data].sort((a, b) =>
-                        new Date(b.createdAt) - new Date(a.createdAt)
-                    )
-                    setOrders(sorted)
-                }
-            } catch (e) {
-                if (!cancelled) setError(e.message)
-            } finally {
-                if (!cancelled) setLoading(false)
-            }
-        }
-
-        fetchOrders()
-        return () => { cancelled = true }
-    }, [user])
+        const controller = new AbortController()
+        ordersApi.list({ signal: controller.signal })
+            .then(data => setOrders(data)) // the server already sends newest first
+            .catch(e => { if (e.name !== 'AbortError') setError(e.message) })
+            .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+        return () => controller.abort()
+    }, [])
 
     return (
         <div style={{ minHeight: '100vh', background: T.linen, fontFamily: FONT }}>

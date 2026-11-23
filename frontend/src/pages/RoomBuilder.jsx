@@ -1,11 +1,8 @@
 // src/pages/RoomBuilder.jsx
 //
-// Drop-in replacement for the previous RoomBuilder.jsx. Same default export
-// name, same props from App.jsx (user, onBack, onProceedToPayment), so no
-// other file needs to change. Step1RoomType.jsx / Step2Dimensions.jsx /
-// Step3Products.jsx / ReviewRoom.jsx are no longer imported — their logic
-// lives inline below, reconstructed from the exact prop contracts the old
-// orchestrator used, since those files weren't available to edit directly.
+// Room Builder wizard: room type → size & flooring → wallpaper → furniture →
+// review → done. The server builds and prices the room (Builder + Strategy
+// patterns); the review step shows the same estimate using the same formulas.
 
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -18,14 +15,11 @@ import {
     FaCouch, FaBed, FaUtensils, FaWineGlassAlt, FaGamepad, FaBriefcase,
     FaChair, FaLightbulb, FaLayerGroup, FaDoorClosed, FaImage, FaPalette,
 } from 'react-icons/fa'
-import { API_ENDPOINTS, WALL_HEIGHT_FT, authFetch, errorMessage } from '../config/api'
-
-// Same formulas as RoomBuilderService on the backend.
-const floorArea = (w, l) => (w || 0) * (l || 0)
-const wallArea = (w, l) => 2 * ((w || 0) + (l || 0)) * WALL_HEIGHT_FT
+import { productsApi, roomsApi } from '../api'
+import { floorArea, wallArea } from '../lib/room'
 
 import WarmHardwood from '../assets/floors/WarmHardwood.jpg'
-import MattePorcelainTile from '../assets/floors/MattePorcelainTile.png'
+import MattePorcelainTile from '../assets/floors/MattePorcelainTile.jpg'
 import SoftWoolCarpet from '../assets/floors/SoftWoolCarpet.jpg'
 import MicroCement from '../assets/floors/MicroCement.jpg'
 import NaturalStone from '../assets/floors/NaturalStone.jpg'
@@ -45,11 +39,6 @@ const T = {
     gold: "#B08D57",
 }
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-// FIX: fetchCategories() previously referenced an undefined API_BASE_URL,
-// so every call threw before setFlooringProducts/setWallpaperProducts ever
-// ran, leaving both arrays empty forever (hence "no options shown" in
-// Step 2 / Step 3). Now using the real API_BASE_URL import from config/api.js.
-
 // Matches Product.java's RoomType enum exactly — the backend GET endpoint
 // needs one of these strings, so this list can't diverge from that enum.
 const ROOM_TYPES = [
@@ -696,7 +685,7 @@ function RoomBuilderSuccess({ room, loading, addedToCart, onAddToCart, onProceed
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN ORCHESTRATOR — same default export name/props as before
 // ═══════════════════════════════════════════════════════════════════════════
-export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
+export default function RoomBuilder({ onBack, onProceedToPayment }) {
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
@@ -711,23 +700,20 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
     const [flooringProducts, setFlooringProducts] = useState([])
     const [wallpaperProducts, setWallpaperProducts] = useState([])
     const [builtRoom, setBuiltRoom] = useState(null)
-    const [addedToCart, setAddedToCart] = useState(false)
+    const [addedToCart, setAddedToCart] = useState(false) // drives the short 'added' message
+    const [roomInCart, setRoomInCart] = useState(false)   // the built room is already in the cart
 
     // ─── FETCH CATEGORIES ─────────────────────────────────────────────────────
     React.useEffect(() => {
-        const fetchCategories = async () => {
-            try {
-                const fRes = await fetch(API_ENDPOINTS.PRODUCTS_BY_CATEGORY('FLOORING'))
-                const wRes = await fetch(API_ENDPOINTS.PRODUCTS_BY_CATEGORY('WALLPAPER'))
-                if (fRes.ok) setFlooringProducts(await fRes.json())
-                else console.error('Flooring fetch failed:', fRes.status, fRes.statusText)
-                if (wRes.ok) setWallpaperProducts(await wRes.json())
-                else console.error('Wallpaper fetch failed:', wRes.status, wRes.statusText)
-            } catch (e) {
-                console.error("Failed to load generic products", e)
-            }
-        }
-        fetchCategories()
+        const controller = new AbortController()
+        const opts = { signal: controller.signal }
+        Promise.all([productsApi.byCategory('FLOORING', opts), productsApi.byCategory('WALLPAPER', opts)])
+            .then(([floors, walls]) => {
+                setFlooringProducts(floors)
+                setWallpaperProducts(walls)
+            })
+            .catch(e => { if (e.name !== 'AbortError') setError(`Couldn't load flooring and wallpaper: ${e.message}`) })
+        return () => controller.abort()
     }, [])
 
     // ─── STEP 1 ───────────────────────────────────────────────────────────────
@@ -749,16 +735,9 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
         setLoading(true)
         setError(null)
         try {
-            const response = await fetch(API_ENDPOINTS.ROOM_PRODUCTS_BY_TYPE(type), {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' },
-            })
-            if (!response.ok) throw new Error(`Failed to load products: ${response.status} ${response.statusText}`)
-            const data = await response.json()
-            setProducts(data)
+            setProducts(await productsApi.forRoom(type))
         } catch (e) {
-            console.error('Fetch error:', e)
-            setError(`Unable to load products. Make sure backend is running on port 8081. Error: ${e.message}`)
+            setError(`Unable to load products: ${e.message}`)
         } finally {
             setLoading(false)
         }
@@ -786,7 +765,6 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
 
     // ─── STEP 5 ───────────────────────────────────────────────────────────────
     const handleBuildRoom = async () => {
-        if (!user) { setError('Please login to build a room'); return }
 
         const validWidth = parseInt(width)
         const validLength = parseInt(length)
@@ -809,16 +787,11 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
                 furnitureProductIds: selectedProducts,
             }
 
-            const response = await authFetch(API_ENDPOINTS.ROOM_BUILD, {
-                method: 'POST',
-                body: JSON.stringify(requestBody),
-            })
-            if (!response.ok) throw new Error(await errorMessage(response, 'The room could not be built.'))
-            const room = await response.json()
+            const room = await roomsApi.build(requestBody)
             setBuiltRoom(room)
+            setRoomInCart(false)
             setStep(6)
         } catch (e) {
-            console.error('Build error:', e)
             setError(`Failed to build room: ${e.message}`)
         } finally {
             setLoading(false)
@@ -827,19 +800,15 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
 
     // ─── ADD BUILT ROOM TO CART ───────────────────────────────────────────────
     const handleAddToCart = async (roomId) => {
-        if (!user) { setError('Please login'); return }
+        if (roomInCart) { setAddedToCart(true); return } // already there: don't add a second one
         setLoading(true)
         setError(null)
         try {
-            const response = await authFetch(API_ENDPOINTS.ROOM_ADD_TO_CART(roomId), {
-                method: 'POST',
-                body: JSON.stringify({ quantity: 1 }),
-            })
-            if (!response.ok) throw new Error(await errorMessage(response, 'Add to cart failed.'))
+            await roomsApi.addToCart(roomId)
+            setRoomInCart(true)
             setAddedToCart(true)
             setTimeout(() => setAddedToCart(false), 2200)
         } catch (e) {
-            console.error('Add to cart error:', e)
             setError(`Failed to add to cart: ${e.message}`)
         } finally {
             setLoading(false)
@@ -848,23 +817,17 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
 
     // ─── PROCEED TO PAYMENT (adds room to cart, fetches cartId) ────────────
     const handleProceedToPayment = async () => {
-        if (!builtRoom || !user) return
+        if (!builtRoom) return
         setLoading(true)
         setError(null)
         try {
-            // Step 1: Add the built room to the user's cart
-            // The response is the updated cart; PaymentPage creates the order from it.
-            const addRes = await authFetch(API_ENDPOINTS.ROOM_ADD_TO_CART(builtRoom.roomId), {
-                method: 'POST',
-                body: JSON.stringify({ quantity: 1 }),
-            })
-            if (!addRes.ok) throw new Error(await errorMessage(addRes, 'Could not add room to cart.'))
-            const cartData = await addRes.json()
-
-            // Step 3: Forward the full cart object to App.jsx → PaymentPage
-            onProceedToPayment?.(cartData)
+            // Put the room in the cart (once), then PaymentPage turns the cart into an order.
+            if (!roomInCart) {
+                await roomsApi.addToCart(builtRoom.roomId)
+                setRoomInCart(true)
+            }
+            onProceedToPayment?.()
         } catch (e) {
-            console.error('Proceed to payment error:', e)
             setError(`Payment setup failed: ${e.message}`)
         } finally {
             setLoading(false)

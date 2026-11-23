@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -55,13 +56,13 @@ public class DesignQuizService {
         return response;
     }
 
-    /** Re-creates the recommendation for the user's most recent quiz. */
+    /** Re-creates the recommendation for the user's most recent quiz; empty if they haven't taken it. */
     @Transactional(readOnly = true)
-    public DesignQuizResponseDTO getLatestRecommendation(Long userId) {
-        DesignQuiz latest = designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("You haven't taken the style quiz yet."));
-        String room = latest.getSelectedRoomType();
-        return recommend(AestheticBundleFactory.createBundle(latest.getSelectedStyle(), room), room);
+    public Optional<DesignQuizResponseDTO> getLatestRecommendation(Long userId) {
+        return designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId).map(latest -> {
+            String room = latest.getSelectedRoomType();
+            return recommend(AestheticBundleFactory.createBundle(latest.getSelectedStyle(), room), room);
+        });
     }
 
     private DesignQuizResponseDTO recommend(StyleBundle bundle, String roomType) {

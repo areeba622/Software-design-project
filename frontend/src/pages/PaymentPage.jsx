@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiLoader } from 'react-icons/fi'
 import { OrderSuccessCard } from '../components/OrderSuccessCard'
-import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
+import { ApiError, ordersApi, paymentsApi } from '../api'
+import { formatPrice } from '../lib/money'
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -42,8 +43,9 @@ const fadeUp = {
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
+// Payment pages always show PKR: that is the currency actually charged.
 function fmtPKR(n) {
-  return `PKR ${Number(n).toLocaleString("en-PK")}`
+  return formatPrice(n, 'PKR')
 }
 
 // ─── Gateway Card ─────────────────────────────────────────────────────────────
@@ -126,7 +128,7 @@ function ResultRow({ label, value, highlight }) {
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-export default function PaymentPage({ user, cart, onBack }) {
+export default function PaymentPage({ onBack }) {
   const navigate = useNavigate()
   const orderCreationStarted = useRef(false)
 
@@ -148,13 +150,16 @@ export default function PaymentPage({ user, cart, onBack }) {
     const createOrder = async () => {
       try {
         // The server turns the logged-in user's own cart into an order.
-        const res = await authFetch(API_ENDPOINTS.ORDER_CREATE, { method: 'POST' })
-        if (!res.ok) throw new Error(await errorMessage(res, 'Could not create your order.'))
-        const data = await res.json()
-        setOrder(data)
+        setOrder(await ordersApi.create())
         setScreen('select-gateway')
       } catch (e) {
-        setOrderError(e.message)
+        // Empty cart usually means the order already exists (e.g. the page was
+        // refreshed, or a payment failed). Resume the newest unpaid order instead.
+        const pending = e instanceof ApiError && e.status === 400
+          ? (await ordersApi.list().catch(() => [])).find(o => o.status === 'PENDING')
+          : null
+        if (pending) setOrder(pending)
+        else setOrderError(e.message)
         setScreen('select-gateway') // show UI with error, not blank screen
       }
     }
@@ -168,26 +173,10 @@ export default function PaymentPage({ user, cart, onBack }) {
 
     try {
       // No amount is sent: the server always charges the order's own total.
-      const res = await authFetch(API_ENDPOINTS.PAYMENT_PROCESS, {
-        method: 'POST',
-        body: JSON.stringify({ orderId: order.orderId, gatewayType: selectedGateway }),
-      })
-
-      if (!res.ok) {
-        // Non-2xx → use Null Object, don't throw
-        const errBody = await res.json().catch(() => ({}))
-        setPaymentResult({
-          ...NullPaymentResult,
-          message: errBody.message || NullPaymentResult.message,
-          orderId: order.orderId,
-        })
-      } else {
-        const data = await res.json()
-        // Attach orderId for the result screen
-        setPaymentResult({ ...data, isNull: false, orderId: order.orderId })
-      }
+      const data = await paymentsApi.pay(order.orderId, selectedGateway)
+      setPaymentResult({ ...data, isNull: false, orderId: order.orderId })
     } catch (e) {
-      // Network / parse error → use Null Object, never leave state null
+      // Declined (402), already paid (409) or network error → Null Object, never null
       setPaymentResult({
         ...NullPaymentResult,
         message: e.message || NullPaymentResult.message,

@@ -29,7 +29,6 @@ export default function BeforeAfterSlider() {
     const [currentPair, setCurrentPair] = useState(0)
     const containerRef = useRef(null)
     const isDragging = useRef(false)
-    const [imageError, setImageError] = useState(false)
 
     const handleMouseDown = () => { isDragging.current = true }
     const handleMouseUp = () => { isDragging.current = false }
@@ -102,15 +101,6 @@ export default function BeforeAfterSlider() {
                     {/* Subtle dark overlay for before state */}
                     <div className="absolute inset-0 bg-black bg-opacity-20" />
 
-                    {/* Loading skeleton for before image */}
-                    {imageError && (
-                        <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
-                            <div className="text-center">
-                                <p className="text-gray-600 font-semibold">Before Image</p>
-                                <p className="text-sm text-gray-500">Uninspired, generic space</p>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* ── AFTER (clipped from the left by sliderPos) ── */}

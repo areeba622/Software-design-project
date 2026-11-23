@@ -71,6 +71,8 @@ class ApiSecurityTest {
         JsonNode user = register();
 
         assertThat(user.get("token").asText()).isNotBlank();
+        mvc.perform(get("/api/design-quiz/latest").header("Authorization", bearer(user)))
+                .andExpect(status().isNoContent()); // hasn't taken the quiz yet
         mvc.perform(get("/api/cart").header("Authorization", bearer(user)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(user.get("userId").asLong()));

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { FiArrowLeft, FiShoppingCart, FiAlertCircle } from "react-icons/fi"
-import { API_ENDPOINTS, authFetch, errorMessage } from "../config/api"
+import { cartApi, productsApi } from "../api"
+import { useAuth } from "../auth/AuthContext"
+import { useCurrency } from "../lib/CurrencyContext"
 
 const C = {
   ink: "#1E252B",
@@ -18,23 +20,15 @@ const C = {
 
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
 
-function formatPrice(pkr, currency) {
-  if (currency === "USD") {
-    const usd = pkr / 280
-    return `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-  return `PKR ${pkr?.toLocaleString("en-PK")}`
-}
-
 function labelFormatter(text) {
   if (!text) return ""
   return text.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
 }
 
-export default function ProductDetails({ user, onBack, onCartChange }) {
+export default function ProductDetails({ onBack, onCartChange }) {
   const { id } = useParams()
-  const navigate = useNavigate()
-  const currency = user?.currencyPreference || "PKR"
+  const { user } = useAuth()
+  const { format } = useCurrency()
 
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -44,20 +38,14 @@ export default function ProductDetails({ user, onBack, onCartChange }) {
   const [addError, setAddError] = useState(null)
 
   useEffect(() => {
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
-    fetch(API_ENDPOINTS.PRODUCT_BY_ID(id))
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Product not found")
-        const data = await res.json()
-        setProduct(data)
-      })
-      .catch((err) => {
-        setError(err.message)
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+    productsApi.get(id, { signal: controller.signal })
+      .then(setProduct)
+      .catch((err) => { if (err.name !== "AbortError") setError(err.message) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [id])
 
   const handleAddToCart = async () => {
@@ -68,12 +56,8 @@ export default function ProductDetails({ user, onBack, onCartChange }) {
     setAdding(true)
     setAddError(null)
     try {
-      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
-        method: "POST",
-        body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: "PRODUCT" }),
-      })
-      if (!res.ok) throw new Error(await errorMessage(res, "Could not add item to cart"))
-      
+      await cartApi.add({ itemId: product.id })
+
       setAdded(true)
       onCartChange?.()
       setTimeout(() => setAdded(false), 2000)
@@ -206,7 +190,7 @@ export default function ProductDetails({ user, onBack, onCartChange }) {
                   <div>
                     <p style={{ fontFamily: FONT, fontSize: 11, color: C.pastelMuted, fontWeight: 700, letterSpacing: "0.05em", margin: "0 0 4px" }}>PRICE</p>
                     <span style={{ fontFamily: FONT, fontSize: 24, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>
-                      {formatPrice(product.priceInPKR, currency)}
+                      {format(product.priceInPKR)}
                     </span>
                   </div>
 
