@@ -1,298 +1,223 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { FiChevronLeft, FiDollarSign, FiAward, FiClock } from 'react-icons/fi'
+import { useEffect, useMemo, useState } from 'react'
+import { FiCopy, FiExternalLink, FiMail } from 'react-icons/fi'
 import { designersApi } from '../api'
 import { useCurrency } from '../lib/CurrencyContext'
+import { STYLES, styleLabel } from '../lib/labels'
+import Button from '../components/ui/Button'
+import Sheet from '../components/ui/Sheet'
 
-// Premium Theme Constants matching Quiz exactly
-const T = {
-  ink:   "#0F172A",
-  clay:  "#C2410C",
-  stone: "#78716C",
-  linen: "#FAFAF9",
-  warm:  "#E7DDD5",
-  white: "#FFFFFF",
+const BUDGETS = [
+  { value: 'LOW', label: 'Under PKR 40,000', test: (r) => r < 40000 },
+  { value: 'MID', label: 'PKR 40,000 to 70,000', test: (r) => r >= 40000 && r <= 70000 },
+  { value: 'HIGH', label: 'Over PKR 70,000', test: (r) => r > 70000 },
+]
+
+const STYLE_TONE = { MINIMALIST: "bg-surface-2 text-ink", SCANDINAVIAN: "bg-sage-soft text-sage", BOHEMIAN: "bg-accent-soft text-accent" }
+const toneFor = (style) => STYLE_TONE[(style || "").toUpperCase()] || "bg-surface text-ink"
+
+const initials = (name = '') =>
+  name
+    .split(' ')
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+
+function Segmented({ label, options, value, onChange }) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+      <span className="w-16 shrink-0 text-sm font-medium text-ink-2">{label}</span>
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+        {[{ value: null, label: 'Any' }, ...options].map((o) => (
+          <button
+            key={String(o.value)}
+            type="button"
+            aria-pressed={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={`h-9 shrink-0 rounded-full px-4 text-sm font-medium transition-colors ${
+              value === o.value ? 'bg-accent text-white' : "bg-white text-ink hover:bg-white/70"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
-const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
 
-export default function DesignersPage({ onBack }) {
+function CopyEmail({ email }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(email)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setCopied(false)
+    }
+  }
+  return (
+    <button type="button" onClick={copy} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-ink">
+      <FiCopy size={14} /> {copied ? 'Copied' : 'Copy'}
+    </button>
+  )
+}
+
+export default function DesignersPage() {
   const { format } = useCurrency()
   const [designers, setDesigners] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [styleFilter, setStyleFilter] = useState('ALL')
-  const [budgetFilter, setBudgetFilter] = useState('ALL')
+  const [style, setStyle] = useState(null)
+  const [budget, setBudget] = useState(null)
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    designersApi.list({ signal: controller.signal })
-      .then(data => { setDesigners(data); setLoading(false) })
-      .catch(e => {
-        if (e.name === 'AbortError') return
-        setError(e.message)
-        setLoading(false)
-      })
+    designersApi
+      .list({ signal: controller.signal })
+      .then((data) => setDesigners(data || []))
+      .catch((e) => e.name !== 'AbortError' && setError(e.message))
+      .finally(() => !controller.signal.aborted && setLoading(false))
     return () => controller.abort()
   }, [])
 
-  const styleOptions = ['ALL', 'MINIMALIST', 'BOHEMIAN', 'SCANDINAVIAN']
-  const budgetOptions = [
-    { label: 'All Budgets', value: 'ALL' },
-    { label: 'Under PKR 40k', value: 'LOW' },
-    { label: 'PKR 40k – 70k', value: 'MID' },
-    { label: 'Over PKR 70k', value: 'HIGH' },
-  ]
-
-  // ⚡ Super Flexible & Fixed Filter Logic
-  const filtered = designers.filter(d => {
-    const dbStyle = (d.preferredStyleName || '').trim().toUpperCase();
-    const currentFilter = (styleFilter || 'ALL').trim().toUpperCase();
-    
-    // 1. Flexible Style Match
-    let styleMatch = false;
-    if (currentFilter === 'ALL') {
-      styleMatch = true;
-    } else if (currentFilter === 'MINIMALIST') {
-      styleMatch = dbStyle.includes('MINI');
-    } else if (currentFilter === 'BOHEMIAN') {
-      styleMatch = dbStyle.includes('BOH') || dbStyle.includes('BOHEMIAN');
-    } else if (currentFilter === 'SCANDINAVIAN') {
-      styleMatch = dbStyle.includes('SCAN') || dbStyle.includes('SCANDINAVIAN');
-    } else {
-      styleMatch = dbStyle === currentFilter;
-    }
-
-    // 2. Budget Match
-    const rate = d.hourlyRatePKR || 0;
-    const budgetMatch =
-      budgetFilter === 'ALL' ||
-      (budgetFilter === 'LOW' && rate < 40000) ||
-      (budgetFilter === 'MID' && rate >= 40000 && rate <= 70000) ||
-      (budgetFilter === 'HIGH' && rate > 70000);
-
-    // Dono conditions sach honi chahiye
-    return styleMatch && budgetMatch;
-  })
+  const filtered = useMemo(
+    () =>
+      designers.filter((d) => {
+        const dStyle = (d.preferredStyleName || '').toUpperCase()
+        const styleOk = !style || dStyle === style
+        const budgetOk = !budget || BUDGETS.find((b) => b.value === budget).test(d.hourlyRatePKR || 0)
+        return styleOk && budgetOk
+      }),
+    [designers, style, budget],
+  )
 
   return (
-    <div style={{ minHeight: '100vh', background: T.linen, fontFamily: FONT }}>
+    <div className="pb-24">
+      <div className="bg-sand">
+      <div className="page pb-8 pt-10 sm:pt-14">
+      <header className="mb-10 max-w-2xl">
+        <h1 className="display text-[2.4rem] sm:text-[3rem]">Designers</h1>
+        <p className="mt-3 text-[17px] leading-relaxed text-ink-2">
+          Each designer works in one of Palette's three styles and charges by the hour. Contact them directly to plan a consultation.
+        </p>
+      </header>
 
-      {/* Sticky Premium Mini-Header */}
-      <div style={{
-        background: 'rgba(250,250,249,0.9)', backdropFilter: 'blur(12px)',
-        borderBottom: `1px solid ${T.warm}`,
-        padding: '0 2rem', height: 60,
-        display: 'flex', alignItems: 'center',
-        position: 'sticky', top: 0, zIndex: 50,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{
-            background: 'none', border: `1.5px solid ${T.warm}`,
-            borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', color: T.ink,
-          }}>
-            <FiChevronLeft size={18} />
-          </button>
-          <div>
-            <h1 style={{ fontFamily: FONT, fontWeight: 800, fontSize: '0.95rem', color: T.ink, margin: 0 }}>
-              Hire a Designer
-            </h1>
-            <p style={{ fontFamily: FONT, fontSize: 11, color: T.stone, margin: 0 }}>
-              Expert curation
-            </p>
-          </div>
-        </div>
+      <div className="space-y-3 border-t border-line-strong/60 pt-6">
+        <Segmented label="Style" options={STYLES.map((s) => ({ value: s, label: styleLabel(s) }))} value={style} onChange={setStyle} />
+        <Segmented label="Rate" options={BUDGETS.map(({ value, label }) => ({ value, label: `${label} /hr` }))} value={budget} onChange={setBudget} />
+      </div>
+      </div>
       </div>
 
-      {/* Main Beautiful Light Header */}
-      <div style={{ padding: '60px 24px 40px', textAlign: 'center' }}>
-        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 680, margin: '0 auto' }}>
-          <p style={{ fontFamily: FONT, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: T.clay, margin: '0 0 10px' }}>
-            AVAILABLE PROFESSIONALS
-          </p>
-          <h2 style={{ fontFamily: FONT, fontWeight: 800, fontSize: '2.2rem', color: T.ink, margin: '0 0 12px', letterSpacing: '-0.035em' }}>
-            Expert Designers
-          </h2>
-          <p style={{ fontFamily: FONT, fontSize: 15, color: T.stone, margin: 0, lineHeight: 1.6 }}>
-            Pakistan's finest interior design professionals — filtered perfectly by your personal budget and home aesthetic.
-          </p>
-        </motion.div>
-      </div>
+      <div className="page pt-10">
 
-      {/* Filter Toolbar Area */}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 1.5rem 3rem' }}>
-        <div style={{ 
-          background: T.white, 
-          border: `1.5px solid ${T.warm}`, 
-          borderRadius: 16, 
-          padding: '1.5rem', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '1.25rem',
-          boxShadow: '0 4px 12px rgba(15,23,42,0.02)',
-          marginBottom: '2.5rem'
-        }}>
-          {/* Style Filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: T.stone, minWidth: 70 }}>STYLE</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {styleOptions.map(st => (
-                <button
-                  key={st}
-                  onClick={() => setStyleFilter(st)}
-                  style={{
-                    padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: FONT,
-                    cursor: 'pointer', border: 'none', transition: 'all 0.2s',
-                    background: styleFilter === st ? T.clay : '#F1F5F9',
-                    color: styleFilter === st ? T.white : T.ink,
-                  }}
-                >
-                  {st === 'ALL' ? 'All Styles' : st.charAt(0) + st.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Budget Filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: T.stone, minWidth: 70 }}>BUDGET</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {budgetOptions.map(b => (
-                <button
-                  key={b.value}
-                  onClick={() => setBudgetFilter(b.value)}
-                  style={{
-                    padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: FONT,
-                    cursor: 'pointer', border: 'none', transition: 'all 0.2s',
-                    background: budgetFilter === b.value ? T.clay : '#F1F5F9',
-                    color: budgetFilter === b.value ? T.white : T.ink,
-                  }}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      {error ? (
+        <div role="alert" className="rounded-panel bg-danger-soft px-6 py-5 text-[15px] text-danger">
+          {error}
         </div>
-
-        {/* Designers Grid */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-            <div style={{ width: 32, height: 32, border: '3px solid rgba(194,65,12,0.1)', borderTopColor: T.clay, borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
-            <p style={{ color: T.stone, fontSize: 14 }}>Loading expert designers...</p>
-          </div>
-        ) : error ? (
-          <div style={{ padding: '16px', borderRadius: 12, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', textAlign: 'center' }}>
-            {error}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem 0', background: T.white, borderRadius: 16, border: `1.5px solid ${T.warm}` }}>
-            <p style={{ color: T.stone, fontSize: 15 }}>No designers matched your exact filter combination.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-            {filtered.map(d => (
-              <motion.div
-                key={d.id}
-                layoutId={`designer-${d.id}`}
+      ) : loading ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-64 animate-pulse rounded-panel bg-surface" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-panel bg-surface px-6 py-16 text-center">
+          <p className="text-[17px] font-semibold text-ink">No designers match both filters</p>
+          <p className="mt-1.5 text-[15px] text-ink-2">Try any style, or a different rate.</p>
+          <Button
+            className="mt-6"
+            onClick={() => {
+              setStyle(null)
+              setBudget(null)
+            }}
+          >
+            Show all designers
+          </Button>
+        </div>
+      ) : (
+        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((d) => (
+            <li key={d.id}>
+              <button
+                type="button"
                 onClick={() => setSelected(d)}
-                whileHover={{ y: -4, boxShadow: '0 12px 24px rgba(15,23,42,0.04)' }}
-                style={{
-                  background: T.white, border: `1.5px solid ${T.warm}`,
-                  borderRadius: 16, padding: '1.5rem', cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', gap: 16, transition: 'box-shadow 0.2s, y 0.2s'
-                }}
+                className="flex h-full w-full flex-col rounded-panel border border-line p-6 text-left transition-colors hover:border-line-strong hover:bg-surface/50"
               >
-                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, color: T.stone }}>
-                    {d.name ? d.name.charAt(0) : 'D'}
-                  </div>
-                  <div>
-                    <h4 style={{ margin: 0, color: T.ink, fontWeight: 700, fontSize: '1.1rem', letterSpacing: '-0.01em' }}>{d.name}</h4>
-                    <span style={{ 
-                      display: 'inline-block', marginTop: 4, background: '#F1F5F9', color: T.ink, 
-                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 
-                    }}>
-                      {d.preferredStyleName || 'Generalist'}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-4">
+                  <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-lg font-medium ${toneFor(d.preferredStyleName)}`}>
+                    {initials(d.name)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[17px] font-semibold text-ink">{d.name}</span>
+                    <span className="block truncate text-sm text-ink-2">{d.specialty}</span>
+                  </span>
                 </div>
-
-                <p style={{ margin: 0, color: T.stone, fontSize: 13, lineHeight: 1.5, flex: 1 }}>
-                  {d.bio || 'Professional interior architect specializing in bespoke interior layout creations.'}
-                </p>
-
-                <div style={{ borderTop: `1px solid ${T.warm}`, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 10, color: T.stone, fontWeight: 600 }}>HOURLY RATE</p>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>{format(d.hourlyRatePKR)}</p>
-                  </div>
-                  <button style={{ background: T.ink, color: T.white, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                    View Profile
-                  </button>
+                <p className="mt-5 line-clamp-3 flex-1 text-[15px] leading-relaxed text-ink-2">{d.bio}</p>
+                <div className="mt-6 flex items-center justify-between border-t border-line pt-4">
+                  <span className={`rounded-full px-3 py-1 text-[13px] font-medium ${toneFor(d.preferredStyleName)}`}>{styleLabel(d.preferredStyleName)}</span>
+                  <span className="tabular text-[15px] font-semibold text-ink">
+                    {format(d.hourlyRatePKR)}
+                    <span className="font-normal text-ink-3"> /hr</span>
+                  </span>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       </div>
-
-      {/* Styled Modal for Detailed Profile View */}
-      <AnimatePresence>
+      <Sheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name || 'Designer'} width={460}>
         {selected && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              style={{ background: T.white, border: `1.5px solid ${T.warm}`, borderRadius: 24, width: '100%', maxWidth: 540, padding: '2rem', position: 'relative', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 700, color: T.stone }}>
-                    {selected.name ? selected.name.charAt(0) : 'D'}
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontFamily: FONT, fontWeight: 800, fontSize: '1.4rem', color: T.ink }}>{selected.name}</h3>
-                    <p style={{ margin: 0, fontSize: 13, color: T.clay, fontWeight: 600 }}>{selected.preferredStyleName} Specialist</p>
-                  </div>
-                </div>
-                <button onClick={() => setSelected(null)} style={{ background: '#F1F5F9', border: 'none', width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: T.ink }}>✕</button>
+          <div className="px-6 py-7">
+            <div className="flex items-center gap-4">
+              <span className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-xl font-medium ${toneFor(selected.preferredStyleName)}`}>
+                {initials(selected.name)}
+              </span>
+              <div>
+                <p className="text-[19px] font-semibold text-ink">{selected.name}</p>
+                <p className="text-[15px] text-ink-2">{selected.specialty}</p>
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-                <div>
-                  <h5 style={{ margin: '0 0 6px', fontSize: 11, color: T.stone, letterSpacing: '0.05em' }}>ABOUT DESIGNER</h5>
-                  <p style={{ margin: 0, fontSize: 14, color: T.ink, lineHeight: 1.6 }}>{selected.bio || 'Brings spaces to life through calculated aesthetics, intelligent lighting systems, and custom furniture curation.'}</p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: T.linen, padding: 14, borderRadius: 12, border: `1px solid ${T.warm}` }}>
-                  <div>
-                    <span style={{ fontSize: 10, color: T.stone, display: 'block', fontWeight: 600 }}>CONSULTATION</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{format(selected.hourlyRatePKR)}/hr</span>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 10, color: T.stone, display: 'block', fontWeight: 600 }}>EXPERIENCE</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>5+ Years Pro</span>
-                  </div>
-                </div>
+            </div>
+            <p className="mt-6 text-[16px] leading-relaxed text-ink">{selected.bio}</p>
+            <dl className="mt-7 divide-y divide-line border-y border-line text-[15px]">
+              <div className="flex justify-between py-3.5">
+                <dt className="text-ink-2">Style</dt>
+                <dd className="font-medium text-ink">{styleLabel(selected.preferredStyleName)}</dd>
               </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setSelected(null)} style={{ flex: 1, background: 'none', border: `1.5px solid ${T.warm}`, borderRadius: 10, padding: '12px 0', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: T.stone, cursor: 'pointer' }}>
-                  Close
-                </button>
-                <a href={`mailto:designer@example.com?subject=Inquiry from Design Studio`} style={{ flex: 2, background: T.clay, color: T.white, textDecoration: 'none', textAlign: 'center', borderRadius: 10, padding: '12px 0', fontFamily: FONT, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                  Book Consultation
+              <div className="flex justify-between py-3.5">
+                <dt className="text-ink-2">Hourly rate</dt>
+                <dd className="tabular font-medium text-ink">{format(selected.hourlyRatePKR)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-ink-2">Email</dt>
+                <dd className="flex min-w-0 items-center gap-3">
+                  <span className="select-all truncate font-medium text-ink">{selected.email}</span>
+                  <CopyEmail email={selected.email} />
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-8 flex flex-col gap-3">
+              <Button size="lg" block onClick={() => (window.location.href = `mailto:${selected.email}?subject=${encodeURIComponent('Design consultation through Palette')}`)}>
+                <FiMail size={17} /> Email {selected.name.split(' ')[0]}
+              </Button>
+              {selected.portfolioUrl && (
+                <a
+                  href={selected.portfolioUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-line-strong text-[15px] font-semibold text-ink transition-colors hover:border-ink"
+                >
+                  <FiExternalLink size={16} /> View portfolio
                 </a>
-              </div>
-            </motion.div>
+              )}
+            </div>
           </div>
         )}
-      </AnimatePresence>
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </Sheet>
     </div>
   )
 }

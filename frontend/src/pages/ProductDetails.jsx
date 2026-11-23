@@ -1,231 +1,263 @@
-import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
-import { FiArrowLeft, FiShoppingCart, FiAlertCircle } from "react-icons/fi"
-import { cartApi, productsApi } from "../api"
-import { useAuth } from "../auth/AuthContext"
-import { useCurrency } from "../lib/CurrencyContext"
+import { useEffect, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { FiCheck, FiChevronRight, FiMinus, FiPlus, FiTruck, FiCreditCard } from 'react-icons/fi'
+import { productsApi } from '../api'
+import { useCart } from '../lib/CartContext'
+import { useCurrency } from '../lib/CurrencyContext'
+import { categoryLabel, roomLabel, styleLabel } from '../lib/labels'
+import Button from '../components/ui/Button'
+import ProductImage from '../components/ui/ProductImage'
+import ProductCard from '../components/ProductCard'
 
-const C = {
-  ink: "#1E252B",
-  mustard: "#EAB308",
-  mustardSoft: "#FEF08A",
-  pastelMuted: "#8C9296",
-  creamBg: "#FAF9F5",
-  gridLine: "#EAE8E2",
-  accentBg: "#F1ECE3",
-  white: "#FFFFFF",
-  clay: "#C2410C",
+const MAX_QTY = 10
+
+function QuantityStepper({ value, onChange }) {
+  return (
+    <div className="inline-flex h-12 items-center rounded-full border border-line-strong" role="group" aria-label="Quantity">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(1, value - 1))}
+        disabled={value <= 1}
+        aria-label="Decrease quantity"
+        className="flex h-full w-11 items-center justify-center rounded-l-full text-ink transition-colors hover:bg-surface disabled:text-ink-3/50"
+      >
+        <FiMinus size={16} />
+      </button>
+      <span className="tabular w-8 text-center text-[15px] font-semibold text-ink" aria-live="polite">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(MAX_QTY, value + 1))}
+        disabled={value >= MAX_QTY}
+        aria-label="Increase quantity"
+        className="flex h-full w-11 items-center justify-center rounded-r-full text-ink transition-colors hover:bg-surface disabled:text-ink-3/50"
+      >
+        <FiPlus size={16} />
+      </button>
+    </div>
+  )
 }
 
-const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-
-function labelFormatter(text) {
-  if (!text) return ""
-  return text.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+function DetailsSkeleton() {
+  return (
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-16" aria-hidden="true">
+      <div className="aspect-[4/5] animate-pulse rounded-panel bg-surface" />
+      <div className="space-y-4 pt-4">
+        <div className="h-4 w-1/3 animate-pulse rounded bg-surface" />
+        <div className="h-10 w-4/5 animate-pulse rounded bg-surface" />
+        <div className="h-7 w-1/4 animate-pulse rounded bg-surface" />
+        <div className="h-24 animate-pulse rounded bg-surface" />
+      </div>
+    </div>
+  )
 }
 
-export default function ProductDetails({ onBack, onCartChange }) {
+export default function ProductDetails() {
   const { id } = useParams()
-  const { user } = useAuth()
+  const { add } = useCart()
   const { format } = useCurrency()
 
   const [product, setProduct] = useState(null)
+  const [related, setRelated] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [adding, setAdding] = useState(false)
-  const [added, setAdded] = useState(false)
+  const [qty, setQty] = useState(1)
+  const [status, setStatus] = useState('idle')
   const [addError, setAddError] = useState(null)
+  const [showBar, setShowBar] = useState(false)
+  const addRef = useRef(null)
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setError(null)
-    productsApi.get(id, { signal: controller.signal })
-      .then(setProduct)
-      .catch((err) => { if (err.name !== "AbortError") setError(err.message) })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    setQty(1)
+    setStatus('idle')
+    productsApi
+      .get(id, { signal: controller.signal })
+      .then((p) => {
+        setProduct(p)
+        return productsApi.list({ signal: controller.signal }).then((list) => {
+          const others = (list || []).filter((x) => x.id !== p.id)
+          const sameStyle = others.filter((x) => x.aestheticStyle === p.aestheticStyle && x.category !== p.category)
+          const sameCategory = others.filter((x) => x.category === p.category)
+          setRelated([...sameCategory.slice(0, 2), ...sameStyle.slice(0, 2)])
+        })
+      })
+      .catch((err) => err.name !== 'AbortError' && setError(err.message))
+      .finally(() => !controller.signal.aborted && setLoading(false))
     return () => controller.abort()
   }, [id])
 
-  const handleAddToCart = async () => {
-    if (!user) {
-      setAddError("Please log in to add items to cart.")
-      return
-    }
-    setAdding(true)
+  // A slim bar with the price and button appears once the main button scrolls away.
+  useEffect(() => {
+    const el = addRef.current
+    if (!el) return
+    const io = new IntersectionObserver(([entry]) => setShowBar(!entry.isIntersecting && entry.boundingClientRect.top < 0))
+    io.observe(el)
+    return () => io.disconnect()
+  }, [product])
+
+  const onAdd = async () => {
+    setStatus('adding')
     setAddError(null)
     try {
-      await cartApi.add({ itemId: product.id })
-
-      setAdded(true)
-      onCartChange?.()
-      setTimeout(() => setAdded(false), 2000)
+      await add({ itemId: product.id, quantity: qty, name: product.name })
+      setStatus('added')
+      setTimeout(() => setStatus('idle'), 2000)
     } catch (err) {
       setAddError(err.message)
-    } finally {
-      setAdding(false)
+      setStatus('idle')
     }
   }
 
+  const addLabel = status === 'added' ? 'Added to cart' : status === 'adding' ? 'Adding…' : 'Add to cart'
+
   return (
-    <div style={{ minHeight: "100vh", background: 'linear-gradient(135deg, #FAF9F5 0%, #F5EFE6 28%, #EDE6F8 58%, #E8F3EF 82%, #FAF9F5 100%)', fontFamily: FONT, position: "relative", overflowX: "hidden" }}>
-      {/* Decorative Grid and Orbs */}
-      <div style={{ position: 'fixed', top: '-10%', right: '-5%', width: 550, height: 550, borderRadius: '50%', background: 'radial-gradient(circle, rgba(234,179,8,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: '-15%', left: '2%', width: 450, height: 450, borderRadius: '50%', background: 'radial-gradient(circle, rgba(167,139,250,0.05) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, backgroundImage: `linear-gradient(${C.gridLine} 1px, transparent 1px), linear-gradient(90deg, ${C.gridLine} 1px, transparent 1px)`, backgroundSize: '60px 60px', opacity: 0.32 }} />
-
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "3rem 2.5rem 5rem", position: 'relative', zIndex: 1 }}>
-        {/* Back Button */}
-        <motion.button
-          onClick={onBack}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          style={{
-            background: "none", border: "none", cursor: "pointer", color: C.ink,
-            display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700,
-            padding: 0, marginBottom: "2.5rem", fontFamily: FONT
-          }}
-        >
-          <FiArrowLeft size={16} /> Back to Catalog
-        </motion.button>
-
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
-            <p style={{ fontFamily: FONT, color: C.pastelMuted }}>Fetching product specs...</p>
-          </div>
+    <div className="page pb-24 pt-6 sm:pt-8">
+      <nav aria-label="Breadcrumb" className="mb-6 flex items-center gap-1.5 overflow-hidden whitespace-nowrap text-sm text-ink-2">
+        <Link to="/catalog" className="hover:text-ink hover:underline">
+          Shop
+        </Link>
+        {product && (
+          <>
+            <FiChevronRight size={14} className="text-ink-3" aria-hidden="true" />
+            <Link to={`/catalog?category=${product.category}`} className="hover:text-ink hover:underline">
+              {categoryLabel(product.category)}
+            </Link>
+            <FiChevronRight size={14} className="text-ink-3" aria-hidden="true" />
+            <span className="min-w-0 truncate text-ink-3" aria-current="page">
+              {product.name}
+            </span>
+          </>
         )}
+      </nav>
 
-        {error && (
-          <div style={{ textAlign: "center", padding: "5rem 2rem", color: "#B91C1C" }}>
-            <FiAlertCircle size={40} style={{ marginBottom: "1rem" }} />
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.5rem" }}>Failed to load product</h2>
-            <p style={{ fontSize: "0.9rem", color: C.pastelMuted, marginBottom: "1.5rem" }}>{error}</p>
-            <motion.button
-              onClick={onBack}
-              style={{ background: C.ink, color: C.white, border: "none", borderRadius: 10, padding: "10px 22px", cursor: "pointer", fontWeight: 700 }}
-            >
-              Go Back
-            </motion.button>
-          </div>
-        )}
-
-        {!loading && !error && product && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.25, 1, 0.5, 1] }}
-            style={{
-              background: C.white,
-              border: `1.5px solid ${C.gridLine}`,
-              borderRadius: 24,
-              boxShadow: '0 20px 50px -12px rgba(30,37,43,0.08)',
-              overflow: "hidden",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-              gap: 0,
-            }}
-          >
-            {/* Image Section */}
-            <div style={{
-              background: `linear-gradient(135deg, ${C.white} 0%, ${C.accentBg} 100%)`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              position: "relative", overflow: "hidden", minHeight: 400
-            }}>
-              {product.imageUrl ? (
-                <img
-                  src={product.imageUrl} alt={product.name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={e => { e.target.style.display = "none" }}
-                />
-              ) : (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 72, marginBottom: 12 }}>🪑</div>
-                  <span style={{ fontFamily: FONT, fontSize: 13, color: C.pastelMuted, fontWeight: 700 }}>
-                    {labelFormatter(product.category || "OTHER")}
-                  </span>
-                </div>
-              )}
-              {product.aestheticStyle && (
-                <span style={{ position: "absolute", top: 24, right: 24, background: "rgba(30,37,43,0.85)", backdropFilter: 'blur(6px)', color: C.white, borderRadius: 8, padding: "6px 14px", fontFamily: FONT, fontSize: 10, fontWeight: 800, letterSpacing: "0.1em" }}>
-                  {product.aestheticStyle.toUpperCase()}
-                </span>
-              )}
-            </div>
-
-            {/* Info Section */}
-            <div style={{ padding: "3rem", display: "flex", flexDirection: "column", gap: "1.5rem", justifyContent: "center" }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {product.category && (
-                  <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", color: C.clay, background: "#FEF2EC", padding: "4px 10px", borderRadius: 6 }}>
-                    {labelFormatter(product.category).toUpperCase()}
-                  </span>
-                )}
-                {product.roomType && (
-                  <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 700, color: C.pastelMuted, background: C.creamBg, padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.gridLine}` }}>
-                    {labelFormatter(product.roomType)}
-                  </span>
-                )}
+      {loading && !product ? (
+        <DetailsSkeleton />
+      ) : error ? (
+        <div className="rounded-panel bg-surface px-6 py-20 text-center">
+          <p className="text-[17px] font-semibold text-ink">This product isn't available</p>
+          <p className="mx-auto mt-1.5 max-w-sm text-[15px] text-ink-2">{error}</p>
+          <Button className="mt-6" to="/catalog">
+            Back to the shop
+          </Button>
+        </div>
+      ) : (
+        product && (
+          <>
+            <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-16">
+              <div className="mx-auto w-full max-w-2xl lg:max-w-none">
+                <ProductImage key={product.id} src={product.imageUrl} alt={product.name} ratio="natural" eager className="rounded-panel" label={categoryLabel(product.category)} />
               </div>
 
-              <div>
-                <h1 style={{ fontFamily: FONT, fontWeight: 800, fontSize: "2rem", color: C.ink, margin: "0 0 10px", letterSpacing: "-0.03em", lineHeight: 1.2 }}>
-                  {product.name}
-                </h1>
-                {product.vendorName && (
-                  <p style={{ fontFamily: FONT, fontSize: 12, color: C.pastelMuted, margin: 0, fontWeight: 600 }}>
-                    By <span style={{ color: C.ink }}>{product.vendorName}</span>
+              <div className="lg:sticky lg:top-[calc(var(--header-h)+2rem)]">
+                <p className="text-[15px] text-ink-2">
+                  <Link to={`/catalog?style=${product.aestheticStyle}`} className="hover:text-ink hover:underline">
+                    {styleLabel(product.aestheticStyle)}
+                  </Link>
+                  {' collection'}
+                </p>
+                <h1 className="display mt-2 text-[2rem] leading-[1.1] sm:text-[2.4rem]">{product.name}</h1>
+                <p className="tabular mt-5 text-[1.75rem] font-semibold text-ink">{format(product.priceInPKR)}</p>
+
+                {product.description && <p className="mt-5 max-w-prose text-[17px] leading-relaxed text-ink-2">{product.description}</p>}
+
+                <div ref={addRef} className="mt-8 flex gap-3">
+                  <QuantityStepper value={qty} onChange={setQty} />
+                  <Button
+                    size="lg"
+                    className={`flex-1 ${status === 'added' ? '!bg-success' : ''}`}
+                    onClick={onAdd}
+                    disabled={status === 'adding'}
+                  >
+                    {status === 'added' && <FiCheck size={18} />}
+                    {addLabel}
+                  </Button>
+                </div>
+                {qty > 1 && <p className="tabular mt-3 text-sm text-ink-2">{qty} for {format(product.priceInPKR * qty)}</p>}
+                {addError && (
+                  <p role="alert" className="mt-3 text-sm text-danger">
+                    {addError}
                   </p>
                 )}
-              </div>
 
-              {product.description && (
-                <p style={{ fontFamily: FONT, fontSize: 14, color: C.pastelMuted, margin: 0, lineHeight: 1.6 }}>
-                  {product.description}
-                </p>
-              )}
+                <dl className="mt-10 divide-y divide-line border-y border-line text-[15px]">
+                  {[
+                    ['Room', roomLabel(product.roomType), `/catalog?room=${product.roomType}`],
+                    ['Category', categoryLabel(product.category), `/catalog?category=${product.category}`],
+                    ['Style', styleLabel(product.aestheticStyle), `/catalog?style=${product.aestheticStyle}`],
+                    ['Sold by', product.vendorName],
+                  ]
+                    .filter(([, v]) => v)
+                    .map(([k, v, to]) => (
+                      <div key={k} className="flex justify-between gap-4 py-3.5">
+                        <dt className="text-ink-2">{k}</dt>
+                        <dd className="text-right font-medium text-ink">
+                          {to ? (
+                            <Link to={to} className="hover:underline">
+                              {v}
+                            </Link>
+                          ) : (
+                            v
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                </dl>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: "1rem", paddingTop: "1.5rem", borderTop: `1px dashed ${C.gridLine}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <p style={{ fontFamily: FONT, fontSize: 11, color: C.pastelMuted, fontWeight: 700, letterSpacing: "0.05em", margin: "0 0 4px" }}>PRICE</p>
-                    <span style={{ fontFamily: FONT, fontSize: 24, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>
-                      {format(product.priceInPKR)}
-                    </span>
-                  </div>
-
-                  <motion.button
-                    onClick={handleAddToCart} disabled={adding}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    style={{
-                      background: added ? "#059669" : C.ink, color: C.white, border: "none", borderRadius: 12,
-                      padding: "12px 24px", cursor: adding ? "wait" : "pointer",
-                      fontFamily: FONT, fontSize: 13, fontWeight: 700,
-                      transition: "background-color 0.2s ease", display: "flex", alignItems: "center", gap: 8,
-                      boxShadow: '0 8px 24px -6px rgba(30,37,43,0.15)'
-                    }}
-                  >
-                    {added ? "✓ Added to Cart" : adding ? "Adding..." : (
-                      <><FiShoppingCart size={15} /> Add to Cart</>
-                    )}
-                  </motion.button>
-                </div>
-
-                <AnimatePresence>
-                  {addError && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      style={{ fontSize: 12, color: "#B91C1C", margin: 0, fontWeight: 600 }}
-                    >
-                      {addError}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+                <ul className="mt-6 space-y-3 text-sm text-ink-2">
+                  <li className="flex gap-3">
+                    <FiTruck size={17} className="mt-0.5 shrink-0 text-ink" />
+                    Delivery is arranged once your order is confirmed.
+                  </li>
+                  <li className="flex gap-3">
+                    <FiCreditCard size={17} className="mt-0.5 shrink-0 text-ink" />
+                    Pay by card through Stripe or with a JazzCash wallet.
+                  </li>
+                </ul>
               </div>
             </div>
-          </motion.div>
-        )}
-      </div>
+
+            {related.length > 0 && (
+              <section className="mt-24 border-t border-line pt-14">
+                <h2 className="display mb-8 text-[1.9rem] sm:text-[2.2rem]">You might also like</h2>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-4 lg:gap-x-6">
+                  {related.map((p) => (
+                    <ProductCard key={p.id} product={p} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <AnimatePresence>
+              {showBar && (
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+                  className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+                >
+                  <div className="page flex h-[4.5rem] items-center gap-4">
+                    <ProductImage src={product.imageUrl} alt="" ratio="1/1" className="hidden w-12 shrink-0 rounded-lg sm:block" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-semibold text-ink">{product.name}</p>
+                      <p className="tabular text-sm text-ink-2">{format(product.priceInPKR * qty)}</p>
+                    </div>
+                    <Button onClick={onAdd} disabled={status === 'adding'} className={status === 'added' ? '!bg-success' : ''}>
+                      {status === 'added' && <FiCheck size={16} />}
+                      {addLabel}
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )
+      )}
     </div>
   )
 }

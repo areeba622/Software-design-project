@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
 import PageLoader from './components/PageLoader'
+import AppLayout from './components/layout/AppLayout'
 
 // Each page is its own chunk, downloaded the first time it is opened.
 const LandingPage = lazy(() => import('./LandingPage'))
@@ -38,71 +39,49 @@ function GuestOnlyRoute() {
 }
 
 export default function App() {
-  const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const goIfLoggedIn = (path) => () =>
-    user ? navigate(path) : navigate('/login', { state: { from: { pathname: path } } })
 
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* ── Public ─────────────────────────────────────────────────────── */}
-        <Route
-          path="/"
-          element={
-            <LandingPage
-              onLogin={() => navigate('/login')}
-              onRegister={() => navigate('/register')}
-              onQuiz={goIfLoggedIn('/quiz')}
-              onRoomBuilder={goIfLoggedIn('/room-builder')}
-            />
-          }
-        />
+        {/* ── Sign in / sign up: full-screen, no site chrome ─────────────── */}
         <Route element={<GuestOnlyRoute />}>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Route>
 
-        {/* ── Logged in ──────────────────────────────────────────────────── */}
-        <Route element={<ProtectedRoute />}>
-          <Route
-            path="/dashboard"
-            element={<Dashboard onNavigate={(page) => navigate(page === 'landing' ? '/' : `/${page}`)} onLogout={() => logout()} />}
-          />
-          <Route
-            path="/catalog"
-            element={
-              <ProductCatalog
-                onRoomBuilder={() => navigate('/room-builder')}
-                onLogout={() => logout()}
-                onBack={() => navigate('/dashboard')}
-                onCheckout={() => navigate('/payment')}
-              />
-            }
-          />
-          <Route
-            path="/flooring-wallpaper"
-            element={
-              <ProductCatalog
-                defaultCategory="FLOORING"
-                pageTitle="Flooring & Wallpaper"
-                pageSubtitle="Transform your floors and walls with our curated collection."
-                onRoomBuilder={() => navigate('/room-builder')}
-                onLogout={() => logout()}
-                onBack={() => navigate('/dashboard')}
-                onCheckout={() => navigate('/payment')}
-              />
-            }
-          />
-          <Route path="/product/:id" element={<ProductDetails onBack={() => navigate('/catalog')} />} />
-          <Route path="/quiz" element={<DesignQuiz onBack={() => navigate('/dashboard')} />} />
-          <Route path="/designers" element={<DesignersPage onBack={() => navigate('/dashboard')} />} />
-          <Route
-            path="/room-builder"
-            element={<RoomBuilder onBack={() => navigate('/dashboard')} onProceedToPayment={() => navigate('/payment')} />}
-          />
-          <Route path="/payment" element={<PaymentPage onBack={() => navigate('/dashboard')} />} />
-          <Route path="/orders" element={<Orders onBack={() => navigate('/dashboard')} />} />
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<LandingPage />} />
+
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/catalog" element={<ProductCatalog />} />
+            <Route
+              path="/flooring-wallpaper"
+              element={
+                <ProductCatalog
+                  defaultCategory="FLOORING"
+                  pageTitle="Flooring and wallpaper"
+                  pageSubtitle="Floors and walls set the tone before a single piece of furniture goes in."
+                />
+              }
+            />
+            <Route path="/product/:id" element={<ProductDetails />} />
+            <Route path="/quiz" element={<DesignQuiz onBack={() => navigate('/dashboard')} />} />
+            <Route path="/designers" element={<DesignersPage />} />
+            <Route
+              path="/room-builder"
+              element={<RoomBuilder onBack={() => navigate('/dashboard')} onProceedToPayment={() => navigate('/payment')} />}
+            />
+            <Route path="/orders" element={<Orders />} />
+          </Route>
+        </Route>
+
+        {/* Checkout keeps the header but drops the footer so the payment stays in focus. */}
+        <Route element={<AppLayout footer={false} />}>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/payment" element={<PaymentPage onBack={() => navigate('/catalog')} />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

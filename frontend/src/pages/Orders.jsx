@@ -1,284 +1,150 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { FiArrowLeft, FiPackage, FiChevronDown } from 'react-icons/fi'
+import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { FiChevronDown, FiPackage } from 'react-icons/fi'
 import { ordersApi } from '../api'
 import { useCurrency } from '../lib/CurrencyContext'
-
-// ─── Design Tokens (matching PaymentPage.jsx) ─────────────────────────────────
-const T = {
-    ink: "#0F172A",
-    clay: "#C2410C",
-    stone: "#78716C",
-    linen: "#FAFAF9",
-    warm: "#E7DDD5",
-    white: "#FFFFFF",
-}
-
-const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-
-// Status → badge color mapping
-const STATUS_STYLES = {
-    PENDING: { bg: '#FEF9C3', fg: '#854D0E' },
-    CONFIRMED: { bg: '#DBEAFE', fg: '#1D4ED8' },
-    SHIPPED: { bg: '#E0E7FF', fg: '#4338CA' },
-    DELIVERED: { bg: '#DCFCE7', fg: '#15803D' },
-    CANCELLED: { bg: '#FEE2E2', fg: '#B91C1C' },
-}
-
+import { ITEM_TYPE_LABELS } from '../lib/labels'
+import Button from '../components/ui/Button'
+import StatusBadge from '../components/StatusBadge'
 
 function fmtDate(iso) {
-    if (!iso) return '—'
-    try {
-        return new Date(iso).toLocaleDateString('en-PK', {
-            day: 'numeric', month: 'short', year: 'numeric',
-        })
-    } catch {
-        return iso
-    }
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// ─── Status Badge ──────────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
-    const style = STATUS_STYLES[status] || { bg: T.warm, fg: T.stone }
-    return (
-        <span style={{
-            display: 'inline-block',
-            padding: '3px 11px',
-            borderRadius: 999,
-            background: style.bg,
-            color: style.fg,
-            fontFamily: FONT, fontSize: 11, fontWeight: 700,
-            letterSpacing: '0.04em', textTransform: 'uppercase',
-        }}>
-            {status}
+function OrderRow({ order, defaultOpen }) {
+  const { format } = useCurrency()
+  const [open, setOpen] = useState(defaultOpen)
+  const items = order.items || []
+  const count = items.reduce((s, i) => s + (i.quantity || 0), 0)
+  const summary = items.length ? `${items[0].itemName}${items.length > 1 ? ` and ${items.length - 1} more` : ''}` : 'No items'
+
+  return (
+    <li className="rounded-panel border border-line transition-colors hover:border-line-strong">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-4 px-5 py-5 text-left sm:px-6"
+      >
+        <span className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface text-ink-2 sm:flex">
+          <FiPackage size={18} />
         </span>
-    )
-}
-
-// ─── Order Card (collapsible) ──────────────────────────────────────────────────
-function OrderCard({ order, index }) {
-    const { format: fmtPKR } = useCurrency()
-    const [open, setOpen] = useState(false)
-    const itemCount = order.items?.length || 0
-    const summary = order.items?.length
-        ? `${order.items[0].itemName}${itemCount > 1 ? ` + ${itemCount - 1} more` : ''}`
-        : 'No items'
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.4), ease: "easeOut" }}
-            style={{
-                border: `1.5px solid ${T.warm}`,
-                borderRadius: 14,
-                background: T.white,
-                overflow: 'hidden',
-                marginBottom: 14,
-            }}
-        >
-            {/* Header row — always visible, toggles items */}
-            <button
-                onClick={() => setOpen(p => !p)}
-                style={{
-                    width: '100%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '18px 20px',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    textAlign: 'left',
-                }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{
-                        width: 40, height: 40, borderRadius: 10,
-                        background: '#F7F5F2',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                    }}>
-                        <FiPackage size={17} color={T.clay} />
-                    </div>
-                    <div>
-                        <p style={{
-                            fontFamily: FONT, fontSize: 14, fontWeight: 700,
-                            color: T.ink, margin: '0 0 3px',
-                        }}>
-                            Order #{order.orderId}
-                        </p>
-                        <p style={{
-                            fontFamily: FONT, fontSize: 12, color: T.stone, margin: 0,
-                        }}>
-                            {fmtDate(order.createdAt)} · {summary}
-                        </p>
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ textAlign: 'right' }}>
-                        <p style={{
-                            fontFamily: FONT, fontSize: 14, fontWeight: 800,
-                            color: T.clay, margin: '0 0 4px',
-                        }}>
-                            {fmtPKR(order.grandTotal)}
-                        </p>
-                        <StatusBadge status={order.status} />
-                    </div>
-                    <motion.div
-                        animate={{ rotate: open ? 180 : 0 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        <FiChevronDown size={16} color={T.stone} />
-                    </motion.div>
-                </div>
-            </button>
-
-            {/* Expandable item list */}
-            <AnimatePresence>
-                {open && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: "easeOut" }}
-                        style={{ overflow: 'hidden' }}
-                    >
-                        <div style={{
-                            padding: '0 20px 18px',
-                            borderTop: `1px solid ${T.warm}`,
-                            marginTop: 0,
-                        }}>
-                            {order.items?.map((item, i) => (
-                                <div key={item.itemId ?? i} style={{
-                                    display: 'flex', justifyContent: 'space-between',
-                                    padding: '10px 0',
-                                    borderBottom: i < order.items.length - 1 ? `1px solid ${T.warm}` : 'none',
-                                    fontFamily: FONT,
-                                }}>
-                                    <span style={{ fontSize: 13, color: T.stone }}>
-                                        {item.itemName} × {item.quantity}
-                                    </span>
-                                    <span style={{ fontSize: 13, color: T.ink, fontWeight: 600 }}>
-                                        {fmtPKR(item.lineTotal)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </motion.div>
-    )
-}
-
-// ─── MAIN COMPONENT ─────────────────────────────────────────────────────────────
-export default function Orders({ onBack }) {
-    const [orders, setOrders] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-
-    useEffect(() => {
-        const controller = new AbortController()
-        ordersApi.list({ signal: controller.signal })
-            .then(data => setOrders(data)) // the server already sends newest first
-            .catch(e => { if (e.name !== 'AbortError') setError(e.message) })
-            .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-        return () => controller.abort()
-    }, [])
-
-    return (
-        <div style={{ minHeight: '100vh', background: T.linen, fontFamily: FONT }}>
-
-            {/* ── Header ── */}
-            <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{
-                    background: T.white,
-                    borderBottom: `1px solid ${T.warm}`,
-                    padding: '16px 24px',
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    position: 'sticky', top: 0, zIndex: 100,
-                }}
-            >
-                <button
-                    onClick={onBack}
-                    style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: 6, display: 'flex', alignItems: 'center',
-                    }}
-                >
-                    <FiArrowLeft size={20} color={T.ink} />
-                </button>
-                <div>
-                    <h1 style={{
-                        fontFamily: FONT, fontSize: '1.3rem',
-                        fontWeight: 800, color: T.ink, margin: 0,
-                    }}>
-                        My Orders
-                    </h1>
-                    <p style={{ fontFamily: FONT, fontSize: 12, color: T.stone, margin: '4px 0 0' }}>
-                        {loading ? 'Loading…' : `${orders.length} order${orders.length === 1 ? '' : 's'}`}
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-[16px] font-semibold text-ink">Order #{order.orderId}</span>
+            <StatusBadge status={order.status} />
+          </span>
+          <span className="mt-1 block truncate text-sm text-ink-2">
+            {fmtDate(order.createdAt)}. {summary}
+          </span>
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="tabular block text-[16px] font-semibold text-ink">{format(order.grandTotal)}</span>
+          <span className="tabular block text-sm text-ink-3">
+            {count} item{count === 1 ? '' : 's'}
+          </span>
+        </span>
+        <FiChevronDown size={18} className={`shrink-0 text-ink-3 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <ul className="mx-5 divide-y divide-line border-t border-line sm:mx-6">
+              {items.map((item, i) => (
+                <li key={`${item.itemType}-${item.itemId ?? i}`} className="flex items-start justify-between gap-4 py-3.5">
+                  <div className="min-w-0">
+                    {item.itemType !== 'PRODUCT' && <p className="text-xs font-medium text-accent">{ITEM_TYPE_LABELS[item.itemType] || item.itemType}</p>}
+                    <p className="text-[15px] text-ink">{item.itemName}</p>
+                    <p className="tabular mt-0.5 text-sm text-ink-3">
+                      {item.quantity} × {format(item.unitPrice)}
                     </p>
-                </div>
-            </motion.div>
+                  </div>
+                  <p className="tabular shrink-0 text-[15px] font-medium text-ink">{format(item.lineTotal)}</p>
+                </li>
+              ))}
+              <li className="flex justify-between py-4 text-[15px]">
+                <span className="text-ink-2">Total charged</span>
+                <span className="tabular font-semibold text-ink">{format(order.grandTotal)}</span>
+              </li>
+            </ul>
+            {order.status === 'PENDING' && (
+              <div className="mx-5 mb-5 flex flex-col gap-3 rounded-card bg-warning-soft p-4 sm:mx-6 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-ink">This order hasn't been paid yet.</p>
+                <Button size="sm" to="/payment">
+                  Pay now
+                </Button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </li>
+  )
+}
 
-            {/* ── Body ── */}
-            <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 24px' }}>
+export default function Orders() {
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-                {/* Error banner */}
-                {error && (
-                    <div style={{
-                        marginBottom: 20, padding: '12px 16px',
-                        background: '#FEF2F2', color: '#991B1B',
-                        border: '1.5px solid #FCA5A5', borderRadius: 10,
-                        fontFamily: FONT, fontSize: 13,
-                    }}>
-                        ⚠️ {error}
-                    </div>
-                )}
+  useEffect(() => {
+    const controller = new AbortController()
+    ordersApi
+      .list({ signal: controller.signal })
+      .then((data) => setOrders(data || [])) // the server already sends newest first
+      .catch((e) => e.name !== 'AbortError' && setError(e.message))
+      .finally(() => !controller.signal.aborted && setLoading(false))
+    return () => controller.abort()
+  }, [])
 
-                {/* Loading state */}
-                {loading && !error && (
-                    <div style={{ textAlign: 'center', paddingTop: 60 }}>
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
-                            style={{
-                                width: 40, height: 40, margin: '0 auto 18px',
-                                border: `3px solid ${T.warm}`,
-                                borderTopColor: T.clay,
-                                borderRadius: '50%',
-                            }}
-                        />
-                        <p style={{ fontFamily: FONT, fontSize: 14, color: T.stone }}>
-                            Loading your orders…
-                        </p>
-                    </div>
-                )}
+  return (
+    <div className="pb-24">
+      <div className="bg-sand">
+      <header className="page max-w-4xl pb-10 pt-10 sm:pt-14">
+        <h1 className="display text-[2.4rem] sm:text-[3rem]">Orders</h1>
+        <p className="mt-2 text-[17px] text-ink-2">
+          {loading ? 'Loading your orders…' : orders.length ? `${orders.length} order${orders.length === 1 ? '' : 's'}, newest first.` : 'Everything you buy will be listed here.'}
+        </p>
+      </header>
+      </div>
+      <div className="page max-w-4xl pt-10">
 
-                {/* Empty state */}
-                {!loading && !error && orders.length === 0 && (
-                    <div style={{ textAlign: 'center', paddingTop: 60 }}>
-                        <div style={{
-                            width: 56, height: 56, borderRadius: '50%', margin: '0 auto 18px',
-                            background: '#F7F5F2',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <FiPackage size={24} color={T.stone} />
-                        </div>
-                        <p style={{ fontFamily: FONT, fontSize: 15, fontWeight: 700, color: T.ink, margin: '0 0 6px' }}>
-                            No orders yet
-                        </p>
-                        <p style={{ fontFamily: FONT, fontSize: 13, color: T.stone, margin: 0 }}>
-                            Your past purchases will show up here once you place an order.
-                        </p>
-                    </div>
-                )}
-
-                {/* Order list */}
-                {!loading && !error && orders.map((order, i) => (
-                    <OrderCard key={order.orderId} order={order} index={i} />
-                ))}
-            </div>
+      {error ? (
+        <div role="alert" className="rounded-panel bg-danger-soft px-6 py-5 text-[15px] text-danger">
+          {error}
         </div>
-    )
+      ) : loading ? (
+        <ul className="space-y-3" aria-hidden="true">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li key={i} className="h-[5.5rem] animate-pulse rounded-panel bg-surface" />
+          ))}
+        </ul>
+      ) : orders.length === 0 ? (
+        <div className="rounded-panel bg-surface px-6 py-20 text-center">
+          <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-canvas text-ink-2">
+            <FiPackage size={22} />
+          </span>
+          <p className="text-[17px] font-semibold text-ink">No orders yet</p>
+          <p className="mx-auto mt-1.5 max-w-sm text-[15px] text-ink-2">Once you check out, your order and its status will show up here.</p>
+          <Button className="mt-6" to="/catalog">
+            Start shopping
+          </Button>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {orders.map((order, i) => (
+            <OrderRow key={order.orderId} order={order} defaultOpen={i === 0} />
+          ))}
+        </ul>
+      )}
+      </div>
+    </div>
+  )
 }
