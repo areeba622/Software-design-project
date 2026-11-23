@@ -22,11 +22,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // ── Layer 2: Quiz & Room Filtering ────────────────────────────────────────
     List<Product> findByRoomType(Product.RoomType roomType);
-    List<Product> findByAestheticStyle(Product.AestheticStyle aestheticStyle);
+    List<Product> findByAestheticStyle(Product.Style aestheticStyle);
     
     // ✅ NEW: Combine room type + aesthetic style for room builder
     List<Product> findByRoomTypeAndAestheticStyle(Product.RoomType roomType, 
-                                                   Product.AestheticStyle aestheticStyle);
+                                                   Product.Style aestheticStyle);
     
     // ✅ NEW: Get all products by room type (all styles mixed)
     List<Product> findByRoomTypeOrderByAestheticStyleAscNameAsc(Product.RoomType roomType);

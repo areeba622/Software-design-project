@@ -42,7 +42,7 @@ public class Product implements InventoryItem {
 
     // ── UPDATED: Aesthetic Style (BOHEMIAN, SCANDINAVIAN, MINIMALIST) ────────
     @Enumerated(EnumType.STRING)
-    private AestheticStyle aestheticStyle;
+    private Style aestheticStyle;
 
     private String vendorName;
 
@@ -63,7 +63,8 @@ public class Product implements InventoryItem {
     }
 
     // ✅ UPDATED ENUM
-    public enum AestheticStyle {
+    /** A product's look. (Not to be confused with the AestheticStyle entity, which describes a style.) */
+    public enum Style {
         BOHEMIAN, SCANDINAVIAN, MINIMALIST
     }
 
@@ -80,7 +81,7 @@ public class Product implements InventoryItem {
     }
 
     public Product(String name, Double priceInPKR, ProductCategory category, 
-                   RoomType roomType, AestheticStyle aestheticStyle) {
+                   RoomType roomType, Style aestheticStyle) {
         this.name = name;
         this.priceInPKR = priceInPKR;
         this.category = category;
@@ -155,11 +156,11 @@ public class Product implements InventoryItem {
         this.roomType = roomType;
     }
 
-    public AestheticStyle getAestheticStyle() {
+    public Style getAestheticStyle() {
         return aestheticStyle;
     }
 
-    public void setAestheticStyle(AestheticStyle aestheticStyle) {
+    public void setAestheticStyle(Style aestheticStyle) {
         this.aestheticStyle = aestheticStyle;
     }
 

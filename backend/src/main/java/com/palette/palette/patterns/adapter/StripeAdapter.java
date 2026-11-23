@@ -1,43 +1,34 @@
 package com.palette.palette.patterns.adapter;
 
-import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Adapter: Converts PKR payments to Stripe's USD + cents format.
- * Stripe expects: amount in cents (integer), currency = USD.
- * Conversion: PKR → USD (÷280) → cents (×100)
+ * ADAPTER — lets Palette pay in PKR through {@link StripeApi}, which wants US cents.
+ * Conversion: PKR → USD (÷ {@value #PKR_TO_USD_RATE}) → cents (× 100, rounded).
  */
 public class StripeAdapter implements LocalPaymentProcessor {
 
-    private final StripeSDK stripeSDK;
+    private static final Logger log = LoggerFactory.getLogger(StripeAdapter.class);
 
     /** Fixed demo exchange rate: 1 USD = 280 PKR. */
     public static final double PKR_TO_USD_RATE = 280.0;
 
-    // Constructors
+    private final StripeApi stripe;
+
     public StripeAdapter() {
-        this.stripeSDK = new StripeSDK();
+        this(new StripeApi());
     }
 
-    public StripeAdapter(StripeSDK stripeSDK) {
-        this.stripeSDK = stripeSDK;
+    public StripeAdapter(StripeApi stripe) {
+        this.stripe = stripe;
     }
 
     @Override
     public String payInPKR(double amountInPKR) {
-
-        // Step 1: Convert PKR to USD
-        double amountInUSD = amountInPKR / PKR_TO_USD_RATE;
-
-        // Step 2: Convert USD to cents (Stripe works in cents)
-        int amountInCents = (int) Math.round(amountInUSD * 100);
-
-        // Step 3: Call Stripe SDK with converted amount
-        System.out.println("StripeAdapter: Converting PKR " + amountInPKR +
-                " to USD " + amountInUSD +
-                " to cents " + amountInCents);
-
-        return stripeSDK.chargeInCents(amountInCents);
+        int cents = (int) Math.round(convertPKRToUSD(amountInPKR) * 100);
+        log.debug("Stripe: PKR {} -> {} US cents", amountInPKR, cents);
+        return stripe.chargeInCents(cents);
     }
 
     @Override
@@ -45,38 +36,7 @@ public class StripeAdapter implements LocalPaymentProcessor {
         return "STRIPE";
     }
 
-    public double getPKRToUSDRate() {
-        return PKR_TO_USD_RATE;
-    }
-
     public static double convertPKRToUSD(double amountInPKR) {
         return amountInPKR / PKR_TO_USD_RATE;
-    }
-
-    // ── Inner Stub: StripeSDK ──────────────────────────────────────────
-
-    /**
-     * Stub implementation of Stripe SDK.
-     * In production, this would call actual Stripe API.
-     */
-    public static class StripeSDK {
-
-        public String chargeInCents(int cents) {
-            // Simulate Stripe charge
-            String transactionId = "stripe_" + UUID.randomUUID().toString();
-            System.out.println("StripeSDK: Charged " + cents + " cents. TxID: " + transactionId);
-            return transactionId;
-        }
-
-        public String refund(String transactionId, int refundCents) {
-            String refundId = "refund_" + UUID.randomUUID().toString();
-            System.out.println("StripeSDK: Refunded " + refundCents + " cents for TxID: "
-                    + transactionId + ". RefundID: " + refundId);
-            return refundId;
-        }
-
-        public boolean isConnected() {
-            return true; // Stub always connected
-        }
     }
 }

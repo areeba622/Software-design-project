@@ -6,15 +6,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 
 import com.palette.palette.patterns.adapter.JazzCashAdapter;
+import com.palette.palette.patterns.adapter.JazzCashApi;
 import com.palette.palette.patterns.adapter.LocalPaymentProcessor;
 import com.palette.palette.patterns.adapter.StripeAdapter;
+import com.palette.palette.patterns.adapter.StripeApi;
 import com.palette.palette.patterns.singleton.PaymentManager;
 
 /** Adapter pattern + Singleton pattern. */
 class PaymentAdapterTest {
 
-    /** Records what the "SDK" was actually asked to charge. */
-    static class RecordingStripeSdk extends StripeAdapter.StripeSDK {
+    /** Fake adaptees that record what they were asked to charge. */
+    static class RecordingStripeSdk extends StripeApi {
         int chargedCents = -1;
 
         @Override
@@ -24,7 +26,7 @@ class PaymentAdapterTest {
         }
     }
 
-    static class RecordingJazzCashSdk extends JazzCashAdapter.JazzCashSDK {
+    static class RecordingJazzCashSdk extends JazzCashApi {
         long chargedPaisa = -1;
 
         @Override

@@ -8,19 +8,35 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.palette.palette.entities.CustomRoom;
+import com.palette.palette.entities.Product;
+import com.palette.palette.entities.Product.ProductCategory;
 import com.palette.palette.patterns.builder.RoomBuilder;
 
-/** Builder pattern. */
+/** Builder pattern (pricing comes from the Strategy pattern). */
 class RoomBuilderTest {
 
+    static Product product(long id, String name, double price, ProductCategory category) {
+        Product p = new Product();
+        p.setId(id);
+        p.setName(name);
+        p.setPriceInPKR(price);
+        p.setCategory(category);
+        return p;
+    }
+
+    private static final Product HARDWOOD = product(1, "Warm Hardwood", 100, ProductCategory.FLOORING);
+    private static final Product BOTANICAL = product(2, "Botanical Leaves", 50, ProductCategory.WALLPAPER);
+    private static final Product SOFA = product(3, "Sofa", 80_000, ProductCategory.SOFA);
+    private static final Product RUG = product(4, "Rug", 20_000, ProductCategory.RUG);
+
     @Test
-    void buildsARoomStepByStep() {
-        CustomRoom room = new RoomBuilder("LIVING_ROOM", 12, 15)
-                .setFlooring("Warm Hardwood")
-                .setWallpaper("Botanical Leaves")
-                .addFurniture("Sofa")
-                .addFurniture("Rug")
-                .setTotalPrice(150_000)
+    void buildsAndPricesARoomStepByStep() {
+        // 12 x 15 room: floor 180 sq ft, walls 2 x (12 + 15) x 10 = 540 sq ft
+        CustomRoom room = new RoomBuilder("living_room", 12, 15)
+                .withFlooring(HARDWOOD)
+                .withWallpaper(BOTANICAL)
+                .addFurniture(SOFA)
+                .addFurniture(RUG)
                 .build();
 
         assertThat(room.getRoomType()).isEqualTo("LIVING_ROOM");
@@ -29,36 +45,44 @@ class RoomBuilderTest {
         assertThat(room.getFlooring()).isEqualTo("Warm Hardwood");
         assertThat(room.getWallpaper()).isEqualTo("Botanical Leaves");
         assertThat(room.getFurnitureItems()).containsExactly("Sofa", "Rug");
-        assertThat(room.getTotalPrice()).isEqualTo(150_000);
+        assertThat(room.getTotalPrice()).isEqualTo(100 * 180 + 50 * 540 + 80_000 + 20_000);
         assertThat(room.getIsFinalized()).isFalse();
     }
 
     @Test
-    void flooringDefaultsToStandard() {
-        CustomRoom room = new RoomBuilder("BEDROOM", 10, 10).addFurniture("Bed").build();
+    void priceCanBePreviewedBeforeBuilding() {
+        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10).addFurniture(SOFA);
+        assertThat(builder.currentPrice()).isEqualTo(80_000);
 
-        assertThat(room.getFlooring()).isEqualTo("Standard");
-        assertThat(room.getWallpaper()).isNull();
+        builder.withFlooring(HARDWOOD);
+        assertThat(builder.currentPrice()).isEqualTo(80_000 + 100 * 100);
     }
 
     @Test
-    void blankFurnitureItemsAreIgnored() {
-        CustomRoom room = new RoomBuilder("BEDROOM", 10, 10)
-                .addFurniture(null)
-                .addFurniture("  ")
-                .addFurniture("Bed")
-                .build();
+    void flooringAndWallpaperAreOptional() {
+        CustomRoom room = new RoomBuilder("BEDROOM", 10, 10).addFurniture(SOFA).build();
 
-        assertThat(room.getFurnitureItems()).containsExactly("Bed");
+        assertThat(room.getFlooring()).isEqualTo("Standard");
+        assertThat(room.getWallpaper()).isNull();
+        assertThat(room.getTotalPrice()).isEqualTo(80_000);
     }
 
     @Test
     void needsAtLeastOneFurnitureItem() {
-        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10);
+        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10).withFlooring(HARDWOOD);
 
         assertThatThrownBy(builder::build)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("furniture");
+    }
+
+    @Test
+    void flooringAndWallpaperMustBeTheRightKindOfProduct() {
+        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10);
+
+        assertThatThrownBy(() -> builder.withFlooring(SOFA)).hasMessageContaining("not a flooring");
+        assertThatThrownBy(() -> builder.withWallpaper(HARDWOOD)).hasMessageContaining("not a wallpaper");
+        assertThatThrownBy(() -> builder.addFurniture(null)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
@@ -74,12 +98,13 @@ class RoomBuilderTest {
     }
 
     @Test
-    void builtRoomDoesNotShareTheBuildersFurnitureList() {
-        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10).addFurniture("Bed");
+    void builtRoomDoesNotChangeWhenTheBuilderIsReused() {
+        RoomBuilder builder = new RoomBuilder("BEDROOM", 10, 10).addFurniture(SOFA);
         CustomRoom room = builder.build();
 
-        builder.addFurniture("Lamp");
+        builder.addFurniture(RUG);
 
-        assertThat(room.getFurnitureItems()).containsExactly("Bed");
+        assertThat(room.getFurnitureItems()).containsExactly("Sofa");
+        assertThat(room.getTotalPrice()).isEqualTo(80_000);
     }
 }

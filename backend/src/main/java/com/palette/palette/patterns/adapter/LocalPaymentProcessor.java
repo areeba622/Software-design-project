@@ -1,22 +1,25 @@
 package com.palette.palette.patterns.adapter;
 
 /**
- * Adapter interface: Unified contract for all payment gateways.
- * Converts all amounts to the gateway's native format internally.
+ * ADAPTER PATTERN — the Target interface.
+ *
+ * <p>Palette thinks in Pakistani rupees. Every gateway is used through this one
+ * interface, whatever currency or unit its own API expects:</p>
+ *
+ * <ul>
+ *   <li>{@link StripeAdapter} adapts {@link StripeApi} (charges US cents)</li>
+ *   <li>{@link JazzCashAdapter} adapts {@link JazzCashApi} (charges paisa)</li>
+ * </ul>
  */
 public interface LocalPaymentProcessor {
 
     /**
-     * Process payment in PKR.
-     * Implementation handles conversion to gateway's required format.
+     * Charges an amount given in PKR.
      *
-     * @param amountInPKR amount in Pakistani Rupees
-     * @return transaction ID from the gateway
+     * @return the gateway's transaction id
      */
     String payInPKR(double amountInPKR);
 
-    /**
-     * Get the gateway type this processor handles.
-     */
+    /** e.g. "STRIPE". */
     String getGatewayType();
 }

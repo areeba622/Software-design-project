@@ -26,19 +26,13 @@ import lombok.RequiredArgsConstructor;
  * Room Builder: turns the user's choices into a {@link CustomRoom} using the
  * {@link RoomBuilder} (Builder pattern).
  *
- * <p>Pricing (all from catalogue prices, never from the client):</p>
- * <ul>
- *   <li>flooring: price per sq ft × floor area (width × length)</li>
- *   <li>wallpaper: price per sq ft × wall area (perimeter × {@value #WALL_HEIGHT_FT} ft)</li>
- *   <li>furniture: sum of the chosen products</li>
- * </ul>
+ * <p>Prices always come from the catalogue. The builder prices each product with
+ * a {@link com.palette.palette.patterns.strategy.PricingStrategy} (Strategy pattern):
+ * flooring per sq ft of floor, wallpaper per sq ft of wall, furniture per item.</p>
  */
 @Service
 @RequiredArgsConstructor
 public class RoomBuilderService {
-
-    /** Standard ceiling height used to work out wall area. */
-    public static final int WALL_HEIGHT_FT = 10;
 
     private final CustomRoomRepository customRoomRepository;
     private final UserRepository userRepository;
@@ -97,22 +91,16 @@ public class RoomBuilderService {
 
     // ── Builder pattern in action ────────────────────────────────────────────
 
+    /** Loads the chosen products and lets the {@link RoomBuilder} assemble and price the room. */
     private CustomRoom assemble(RoomBuilderRequestDTO dto) {
         String roomType = ECommerceService.parseEnum(Product.RoomType.class, dto.getRoomType(), "room type").name();
         RoomBuilder builder = new RoomBuilder(roomType, dto.getWidth(), dto.getLength());
 
-        double price = 0;
-
         if (dto.getFlooringProductId() != null) {
-            Product flooring = loadProduct(dto.getFlooringProductId(), Product.ProductCategory.FLOORING, "flooring");
-            builder.setFlooring(flooring.getName());
-            price += flooring.getPrice() * floorArea(dto.getWidth(), dto.getLength());
+            builder.withFlooring(loadProduct(dto.getFlooringProductId(), "flooring"));
         }
-
         if (dto.getWallpaperProductId() != null) {
-            Product wallpaper = loadProduct(dto.getWallpaperProductId(), Product.ProductCategory.WALLPAPER, "wallpaper");
-            builder.setWallpaper(wallpaper.getName());
-            price += wallpaper.getPrice() * wallArea(dto.getWidth(), dto.getLength());
+            builder.withWallpaper(loadProduct(dto.getWallpaperProductId(), "wallpaper"));
         }
 
         Map<Long, Product> furniture = productRepository.findAllById(dto.getFurnitureProductIds()).stream()
@@ -122,28 +110,15 @@ public class RoomBuilderService {
             if (piece == null) {
                 throw new IllegalArgumentException("Furniture product " + id + " does not exist.");
             }
-            builder.addFurniture(piece.getName());
-            price += piece.getPrice();
+            builder.addFurniture(piece);
         }
 
-        return builder.setTotalPrice(Math.round(price * 100) / 100.0).build();
+        return builder.build();
     }
 
-    public static int floorArea(int width, int length) {
-        return width * length;
-    }
-
-    public static int wallArea(int width, int length) {
-        return 2 * (width + length) * WALL_HEIGHT_FT;
-    }
-
-    private Product loadProduct(Long id, Product.ProductCategory expected, String label) {
-        Product product = productRepository.findById(id)
+    private Product loadProduct(Long id, String label) {
+        return productRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("The chosen " + label + " (product " + id + ") does not exist."));
-        if (product.getCategory() != expected) {
-            throw new IllegalArgumentException("Product " + id + " is not a " + label + " product.");
-        }
-        return product;
     }
 
     private CustomRoom findOwnedRoom(Long roomId, Long userId) {

@@ -8,10 +8,14 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 
 import com.palette.palette.patterns.factory.AestheticBundleFactory;
+import com.palette.palette.patterns.factory.BohemianBundleFactory;
+import com.palette.palette.patterns.factory.MinimalistBundleFactory;
+import com.palette.palette.patterns.factory.ScandinavianBundleFactory;
 import com.palette.palette.patterns.factory.StyleBundle;
+import com.palette.palette.patterns.factory.StyleBundleFactory;
 import com.palette.palette.patterns.nullobject.NoStyleBundle;
 
-/** Factory pattern + Null Object pattern. */
+/** Factory Method pattern + Null Object pattern. */
 class AestheticBundleFactoryTest {
 
     @ParameterizedTest(name = "{0} gets discount factor {1}")
@@ -61,11 +65,39 @@ class AestheticBundleFactoryTest {
         assertThat(second.getRecommendedProductIds()).doesNotContain(999L);
     }
 
+    @Test
+    void eachConcreteCreatorMakesBundlesOfItsOwnStyle() {
+        for (StyleBundleFactory factory : new StyleBundleFactory[] {
+                new BohemianBundleFactory(), new ScandinavianBundleFactory(), new MinimalistBundleFactory() }) {
+            StyleBundle bundle = factory.createBundle("BEDROOM");
+
+            assertThat(bundle.isAvailable()).isTrue();
+            assertThat(bundle.getStyleName()).isEqualTo(factory.styleName());
+            assertThat(bundle.getDiscountFactor()).isEqualTo(factory.discountFactor());
+        }
+    }
+
+    @Test
+    void theRegistryKnowsEveryStyleAndRoom() {
+        assertThat(AestheticBundleFactory.getAllStyles()).containsExactly("BOHEMIAN", "SCANDINAVIAN", "MINIMALIST");
+        assertThat(AestheticBundleFactory.getAllRoomTypes()).containsExactly("BEDROOM", "LIVING_ROOM", "KITCHEN", "DINING_ROOM");
+    }
+
+    @Test
+    void theNullObjectCannotBeFilled() {
+        StyleBundle none = AestheticBundleFactory.createBundle("NOPE", "BEDROOM");
+        none.addRecommendedProductId(1L);
+
+        assertThat(none.getRecommendedProductIds()).isEmpty();
+        assertThat(none.isAvailable()).isFalse();
+    }
+
     private static void assertIsNullObject(StyleBundle bundle) {
         assertThat(bundle).isInstanceOf(NoStyleBundle.class);
         assertThat(bundle.getStyleName()).isEqualTo("NONE");
         assertThat(bundle.getDiscountFactor()).isEqualTo(1.0);
         assertThat(bundle.getRecommendedProductIds()).isEmpty();
         assertThat(bundle.getProductCount()).isZero();
+        assertThat(bundle.isAvailable()).isFalse();
     }
 }

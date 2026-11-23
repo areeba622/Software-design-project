@@ -55,7 +55,7 @@ export const API_ENDPOINTS = {
   DESIGNER_BY_ID: (id) => `${API_BASE_URL}/api/designers/${id}`,
 }
 
-/** Must match RoomBuilderService.WALL_HEIGHT_FT on the backend. */
+/** Must match RoomDimensions.WALL_HEIGHT_FT on the backend. */
 export const WALL_HEIGHT_FT = 10
 
 // ── Session ──────────────────────────────────────────────────────────────────

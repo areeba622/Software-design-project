@@ -45,9 +45,9 @@ public class DesignQuizService {
      */
     @Transactional
     public DesignQuizResponseDTO submitQuiz(String style, String roomType, Long userId) {
-        DesignQuizResponseDTO response = recommend(style, roomType);
-        boolean matched = !"NONE".equals(response.getAestheticStyle());
-        if (userId != null && matched) {
+        StyleBundle bundle = AestheticBundleFactory.createBundle(style, roomType);
+        DesignQuizResponseDTO response = recommend(bundle, roomType);
+        if (userId != null && bundle.isAvailable()) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
             designQuizRepository.save(new DesignQuiz(user, response.getAestheticStyle(), response.getRoomType()));
@@ -60,12 +60,12 @@ public class DesignQuizService {
     public DesignQuizResponseDTO getLatestRecommendation(Long userId) {
         DesignQuiz latest = designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("You haven't taken the style quiz yet."));
-        return recommend(latest.getSelectedStyle(), latest.getSelectedRoomType());
+        String room = latest.getSelectedRoomType();
+        return recommend(AestheticBundleFactory.createBundle(latest.getSelectedStyle(), room), room);
     }
 
-    private DesignQuizResponseDTO recommend(String style, String roomType) {
-        StyleBundle bundle = AestheticBundleFactory.createBundle(style, roomType);
-        if (bundle instanceof NoStyleBundle) {
+    private DesignQuizResponseDTO recommend(StyleBundle bundle, String roomType) {
+        if (!bundle.isAvailable()) { // Null Object: no curated set for this choice
             return noMatch(bundle, roomType);
         }
 
