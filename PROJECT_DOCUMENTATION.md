@@ -587,7 +587,7 @@ Rather than using `import.meta.env.VITE_API_BASE_URL`, `http://localhost:8081` i
 │ Location                 │ Vulnerability Type   │ Severity │ Description                 │
 ├──────────────────────────┼──────────────────────┼──────────┼─────────────────────────────┤
 │ application.properties:4 │ Hardcoded Credential │ HIGH     │ Plaintext database password │
-│                          │                      │          │ `password=***REMOVED***` committed   │
+│                          │                      │          │ (value redacted) committed  │
 │                          │                      │          │ to git repository.          │
 ├──────────────────────────┼──────────────────────┼──────────┼─────────────────────────────┤
 │ SecurityConfig.java:39   │ Broken Access Control│ HIGH     │ `anyRequest().permitAll()`  │
