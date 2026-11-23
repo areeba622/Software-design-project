@@ -15,7 +15,7 @@ import minimalistImg from '../assets/styles/minimalist.jpg'
 import scandinavianImg from '../assets/styles/scandinavian.jpg'
 import bohemianImg from '../assets/styles/bohemian.jpg'
 import plannerImg from '../assets/floors/WarmHardwood.jpg'
-import designerImg from '../assets/beforeAfter/after1.jpg'
+import designerImg from '../assets/designers/ayesha.jpg'
 
 const STYLE_TINT = { MINIMALIST: "bg-surface-2", SCANDINAVIAN: "bg-sage-soft", BOHEMIAN: "bg-accent-soft" }
 const STYLE_BOARDS = { MINIMALIST: minimalistImg, SCANDINAVIAN: scandinavianImg, BOHEMIAN: bohemianImg }
