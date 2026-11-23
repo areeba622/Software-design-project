@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { API_ENDPOINTS, authFetch, errorMessage } from "../config/api"
 import { motion, AnimatePresence, useInView } from "framer-motion"
 import {
   FiSearch, FiShoppingCart, FiX, FiChevronDown, FiLogOut, FiGrid, FiMenu
@@ -19,7 +20,6 @@ const C = {
 }
 
 const FONT = "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
-const BASE = "http://localhost:8081"
 
 const CATEGORIES = ["ALL", "BED", "CHAIR", "TABLE", "LAMP", "RUG", "WARDROBE", "SOFA", "FLOORING", "WALLPAPER", "DECOR", "OTHER"]
 const ROOM_TYPES = ["ALL", "BEDROOM", "LIVING_ROOM", "KITCHEN", "DINING ROOM", "GAME ROOM", "OFFICE"]
@@ -454,14 +454,14 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
     // ✅ FIX 2: Only fetch from DB when drawer opens (cart is null after reset)
     if (!user) return
     setLoading(true)
-    fetch(`${BASE}/api/cart?userId=${user.userId}`)
-      .then(r => r.json())
+    authFetch(API_ENDPOINTS.CART)
+      .then(r => (r.ok ? r.json() : null))
       .then(d => setCart(d))
       .catch(() => setCart(null))
       .finally(() => setLoading(false))
   }, [open, user])
 
-  // ✅ FIX 3: removeItem only updates local state — no re-fetch after delete
+  // Remove right away in the UI, then use the server's updated cart (or reload it if the delete failed).
   const removeItem = async (cartItemId) => {
     setCart(prev => ({
       ...prev,
@@ -470,7 +470,13 @@ function CartDrawer({ open, user, currency, onClose, onCheckout }) {
         .filter(l => l.cartItemId !== cartItemId)
         .reduce((sum, l) => sum + l.lineTotal, 0)
     }))
-    await fetch(`${BASE}/api/cart/remove/${cartItemId}?userId=${user.userId}`, { method: "DELETE" })
+    try {
+      const res = await authFetch(API_ENDPOINTS.CART_REMOVE(cartItemId), { method: "DELETE" })
+      const fresh = res.ok ? await res.json() : await (await authFetch(API_ENDPOINTS.CART)).json()
+      setCart(fresh)
+    } catch {
+      // keep the optimistic state; the next open re-fetches the cart
+    }
   }
 
   return (
@@ -588,18 +594,17 @@ export default function ProductCatalog({
     setLoading(true)
     setError(null)
     try {
-      let url = `${BASE}/api/products`
-      if (search.trim()) url = `${BASE}/api/products/search?keyword=${encodeURIComponent(search.trim())}`
-      else if (maxPrice) url = `${BASE}/api/products/filter?maxPrice=${maxPrice}`
-      else if (category !== "ALL") url = `${BASE}/api/products/category/${category}`
-
+      // The server does the text search; every other filter is applied here so they
+      // all combine (before, picking a price cap silently dropped the category filter).
+      const url = search.trim() ? API_ENDPOINTS.PRODUCTS_SEARCH(search.trim()) : API_ENDPOINTS.PRODUCTS
       const res = await fetch(url)
-      if (!res.ok) throw new Error("Failed to load products")
+      if (!res.ok) throw new Error(await errorMessage(res, "Failed to load products"))
       let data = await res.json()
 
+      if (category !== "ALL") data = data.filter(p => p.category === category)
       if (roomType !== "ALL") data = data.filter(p => p.roomType === roomType)
       if (style !== "ALL") data = data.filter(p => p.aestheticStyle === style)
-      if (maxPrice && search.trim()) data = data.filter(p => p.priceInPKR <= maxPrice)
+      if (maxPrice) data = data.filter(p => p.priceInPKR <= maxPrice)
 
       setProducts(data)
     } catch (e) {
@@ -618,7 +623,8 @@ export default function ProductCatalog({
   const refreshCartCount = async () => {
     if (!user) return
     try {
-      const res = await fetch(`${BASE}/api/cart?userId=${user.userId}`)
+      const res = await authFetch(API_ENDPOINTS.CART)
+      if (!res.ok) return
       const d = await res.json()
       setCartCount(d?.lines?.length || 0)
     } catch (_) { }
@@ -633,12 +639,11 @@ export default function ProductCatalog({
     }
     setAddError(null)
     try {
-      const res = await fetch(`${BASE}/api/cart/add?userId=${user.userId}`, {
+      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: "PRODUCT" }),
       })
-      if (!res.ok) throw new Error("Could not add item")
+      if (!res.ok) throw new Error(await errorMessage(res, "Could not add item"))
       refreshCartCount()
     } catch (e) {
       setAddError(e.message)

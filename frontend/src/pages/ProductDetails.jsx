@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { FiArrowLeft, FiShoppingCart, FiAlertCircle } from "react-icons/fi"
-import { API_ENDPOINTS } from "../config/api"
+import { API_ENDPOINTS, authFetch, errorMessage } from "../config/api"
 
 const C = {
   ink: "#1E252B",
@@ -68,12 +68,11 @@ export default function ProductDetails({ user, onBack, onCartChange }) {
     setAdding(true)
     setAddError(null)
     try {
-      const res = await fetch(API_ENDPOINTS.CART_ADD(user.userId), {
+      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: "PRODUCT" }),
       })
-      if (!res.ok) throw new Error("Could not add item to cart")
+      if (!res.ok) throw new Error(await errorMessage(res, "Could not add item to cart"))
       
       setAdded(true)
       onCartChange?.()

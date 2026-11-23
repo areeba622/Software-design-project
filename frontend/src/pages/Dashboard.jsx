@@ -10,7 +10,7 @@ import {
   FiArrowRight,
   FiPackage,
 } from 'react-icons/fi'
-import { API_BASE_URL, API_ENDPOINTS } from '../config/api'
+import { API_ENDPOINTS, authFetch } from '../config/api'
 import PaletteLogoFan from '../components/PaletteLogoFan'
 
 
@@ -641,8 +641,8 @@ export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleF
   useEffect(() => {
     if (!user) return
     Promise.all([
-      fetch(API_ENDPOINTS.CART(user.userId)).then(r => r.json()).catch(() => null),
-      fetch(API_ENDPOINTS.ORDERS_BY_USER(user.userId)).then(r => r.json()).catch(() => []),
+      authFetch(API_ENDPOINTS.CART).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      authFetch(API_ENDPOINTS.ORDERS).then(r => (r.ok ? r.json() : [])).catch(() => []),
     ]).then(([cart, orders]) => {
       setCartCount(cart?.lines?.length || 0)
       setOrderCount(Array.isArray(orders) ? orders.length : 0)
@@ -652,7 +652,7 @@ export default function Dashboard({ user, onNavigate, onLogout, setCatalogStyleF
   // Latest quiz result
   useEffect(() => {
     if (!user) return
-    fetch(API_ENDPOINTS.QUIZ_LATEST(user.userId))
+    authFetch(API_ENDPOINTS.QUIZ_LATEST)
       .then(r => (r.ok ? r.json() : null))
       .then(setLatestQuiz)
       .catch(() => setLatestQuiz(null))

@@ -2,9 +2,11 @@ package com.palette.palette.services;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,6 +14,7 @@ import com.palette.palette.dto.CartItemRequestDTO;
 import com.palette.palette.dto.CartResponseDTO;
 import com.palette.palette.entities.Cart;
 import com.palette.palette.entities.CartItem;
+import com.palette.palette.entities.CustomRoom;
 import com.palette.palette.entities.FurnitureBundle;
 import com.palette.palette.entities.Product;
 import com.palette.palette.entities.User;
@@ -19,22 +22,27 @@ import com.palette.palette.exceptions.ResourceNotFoundException;
 import com.palette.palette.patterns.composite.InventoryItem;
 import com.palette.palette.repository.CartItemRepository;
 import com.palette.palette.repository.CartRepository;
-import com.palette.palette.repository.FurnitureBundleRepository;
 import com.palette.palette.repository.CustomRoomRepository;
+import com.palette.palette.repository.FurnitureBundleRepository;
 import com.palette.palette.repository.ProductRepository;
 import com.palette.palette.repository.UserRepository;
-import jakarta.persistence.EntityManager; //extra
-import jakarta.persistence.PersistenceContext; //extra
+
 import lombok.RequiredArgsConstructor;
 
+/**
+ * The user's shopping cart.
+ *
+ * <p>Products, bundles and custom rooms are all {@link InventoryItem}s (Composite
+ * pattern), so every cart line is priced the same way: {@code item.getPrice() × quantity}.
+ * {@link #priceLines(Cart)} is the one place that does this; checkout uses it too, so the
+ * cart total and the order total always agree.</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CartManager {
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CartManager.class);
+    private static final Logger log = LoggerFactory.getLogger(CartManager.class);
+    private static final int MAX_QUANTITY = 99;
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -43,249 +51,164 @@ public class CartManager {
     private final CustomRoomRepository customRoomRepository;
     private final UserRepository userRepository;
 
-    // ── Singleton session store ────────────────────────────────────────────────
-    private final ConcurrentHashMap<Long, Cart> activeCartSessions = new ConcurrentHashMap<>();
+    /** A cart line together with the item it points at and its current price. */
+    public record PricedLine(CartItem line, InventoryItem item, double unitPrice) {
+        public double lineTotal() {
+            return unitPrice * line.getQuantity();
+        }
+    }
 
-    // ── Core Singleton Method ──────────────────────────────────────────────────
     @Transactional
     public Cart getOrCreateCart(Long userId) {
-
-        // ✅ FIX: Removed stale cache check — always read from DB to get fresh state
-        Optional<Cart> existingCart = cartRepository.findByUserId(userId);
-        if (existingCart.isPresent()) {
-            Cart cart = existingCart.get();
-            activeCartSessions.put(userId, cart);
-            log.debug("CartManager: loaded cart from DB for userId={}", userId);
-            return cart;
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found with id: " + userId));
-
-        // ❌ REMOVED Cart.builder() -> REPLACED with standard constructor
-        Cart newCart = new Cart();
-        newCart.setUser(user);
-        newCart.setItems(new ArrayList<>());
-
-        Cart saved = cartRepository.save(newCart);
-        activeCartSessions.put(userId, saved);
-        log.info("CartManager: new cart created for userId={}", userId);
-        return saved;
+        return cartRepository.findByUserId(userId).orElseGet(() -> {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+            log.info("Creating cart for user {}", userId);
+            return cartRepository.save(new Cart(user));
+        });
     }
 
-    // ── Add Item ───────────────────────────────────────────────────────────────
+    // ── Add ──────────────────────────────────────────────────────────────────
+
     @Transactional
-    public void addItemToCart(Long userId, CartItemRequestDTO dto) {
-
+    public CartResponseDTO addItemToCart(Long userId, CartItemRequestDTO dto) {
         Cart cart = getOrCreateCart(userId);
-        String type = dto.getItemType().toUpperCase();
+        CartItem.ItemType type = parseItemType(dto.getItemType());
 
-        if (type.equals("PRODUCT")) {
-
-            Product product = productRepository.findById(dto.getItemId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found with id: " + dto.getItemId()));
-
-            Optional<CartItem> existing = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId());
-
-            if (existing.isPresent()) {
-                CartItem line = existing.get();
-                line.setQuantity(line.getQuantity() + dto.getQuantity());
-                cartItemRepository.save(line);
-                log.debug("CartManager: incremented product {} quantity in cart {}",
-                        product.getId(), cart.getId());
-            } else {
-                // ❌ REMOVED CartItem.builder() -> REPLACED with setters
-                CartItem newLine = new CartItem();
-                newLine.setCart(cart);
-                newLine.setProduct(product);
-                newLine.setItemType(CartItem.ItemType.PRODUCT);
-                newLine.setQuantity(dto.getQuantity());
-                newLine.setUnitPrice(product.getPrice());
-
-                cartItemRepository.save(newLine);
-                log.debug("CartManager: added product {} to cart {}",
-                        product.getId(), cart.getId());
+        Optional<CartItem> existing;
+        InventoryItem item;
+        switch (type) {
+            case PRODUCT -> {
+                Product product = productRepository.findById(dto.getItemId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + dto.getItemId()));
+                existing = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId());
+                item = product;
             }
-
-        } else if (type.equals("BUNDLE")) {
-
-            FurnitureBundle bundle = bundleRepository.findById(dto.getItemId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Bundle not found with id: " + dto.getItemId()));
-
-            Optional<CartItem> existing = cartItemRepository.findByCartIdAndBundleId(cart.getId(), bundle.getId());
-
-            if (existing.isPresent()) {
-                CartItem line = existing.get();
-                line.setQuantity(line.getQuantity() + dto.getQuantity());
-                cartItemRepository.save(line);
-                log.debug("CartManager: incremented bundle {} quantity in cart {}",
-                        bundle.getId(), cart.getId());
-            } else {
-                // ❌ REMOVED CartItem.builder() -> REPLACED with setters
-                CartItem newLine = new CartItem();
-                newLine.setCart(cart);
-                newLine.setBundle(bundle);
-                newLine.setItemType(CartItem.ItemType.BUNDLE);
-                newLine.setQuantity(dto.getQuantity());
-                newLine.setUnitPrice(bundle.getPrice());
-
-                cartItemRepository.save(newLine);
-                log.debug("CartManager: added bundle {} to cart {} at composite price {}",
-                        bundle.getId(), cart.getId(), bundle.getPrice());
+            case BUNDLE -> {
+                FurnitureBundle bundle = bundleRepository.findById(dto.getItemId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Bundle not found with id: " + dto.getItemId()));
+                existing = cartItemRepository.findByCartIdAndBundleId(cart.getId(), bundle.getId());
+                item = bundle;
             }
-
-        } else if (type.equals("CUSTOM_ROOM")) {
-            com.palette.palette.entities.CustomRoom room = customRoomRepository.findById(dto.getItemId())
-                    .orElseThrow(
-                            () -> new ResourceNotFoundException("Custom room not found with id: " + dto.getItemId()));
-
-            Optional<CartItem> existing = cartItemRepository.findByCartIdAndCustomRoomId(cart.getId(), room.getId());
-
-            if (existing.isPresent()) {
-                CartItem line = existing.get();
-                line.setQuantity(line.getQuantity() + dto.getQuantity());
-                cartItemRepository.save(line);
-                log.debug("CartManager: incremented custom room {} quantity in cart {}", room.getId(), cart.getId());
-            } else {
-                CartItem newLine = new CartItem();
-                newLine.setCart(cart);
-                newLine.setCustomRoom(room);
-                newLine.setItemType(CartItem.ItemType.CUSTOM_ROOM);
-                newLine.setQuantity(dto.getQuantity());
-                newLine.setUnitPrice(room.getTotalPrice());
-
-                cartItemRepository.save(newLine);
-                log.debug("CartManager: added custom room {} to cart {}", room.getId(), cart.getId());
+            case CUSTOM_ROOM -> {
+                // Only the room's owner may buy it.
+                CustomRoom room = customRoomRepository.findByIdAndUserId(dto.getItemId(), userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Custom room not found with id: " + dto.getItemId()));
+                existing = cartItemRepository.findByCartIdAndCustomRoomId(cart.getId(), room.getId());
+                item = room;
             }
-
-        } else {
-            throw new IllegalArgumentException(
-                    "Invalid itemType: '" + dto.getItemType() +
-                            "'. Accepted values are 'PRODUCT', 'BUNDLE', or 'CUSTOM_ROOM'.");
+            default -> throw new IllegalArgumentException("Designers can't be added to the cart yet.");
         }
 
-        Cart refreshed = cartRepository.findById(cart.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Cart session lost"));
-        activeCartSessions.put(userId, refreshed);
+        CartItem line = existing.orElseGet(() -> newLine(cart, type, item));
+        int quantity = line.getId() == null ? dto.getQuantity() : line.getQuantity() + dto.getQuantity();
+        if (quantity > MAX_QUANTITY) {
+            throw new IllegalArgumentException("You can have at most " + MAX_QUANTITY + " of one item in your cart.");
+        }
+        line.setQuantity(quantity);
+        line.setUnitPrice(item.getPrice());
+        cartItemRepository.save(line);
+
+        log.debug("Cart {}: {} {} x{}", cart.getId(), type, item.getId(), quantity);
+        return getCartSummary(userId);
     }
 
-    // ── Cart Summary ───────────────────────────────────────────────────────────
-    @Transactional(readOnly = true)
+    private static CartItem newLine(Cart cart, CartItem.ItemType type, InventoryItem item) {
+        CartItem line = new CartItem();
+        line.setCart(cart);
+        line.setItemType(type);
+        switch (type) {
+            case PRODUCT -> line.setProduct((Product) item);
+            case BUNDLE -> line.setBundle((FurnitureBundle) item);
+            case CUSTOM_ROOM -> line.setCustomRoom((CustomRoom) item);
+            default -> throw new IllegalStateException("Unsupported cart item type: " + type);
+        }
+        cart.getItems().add(line);
+        return line;
+    }
+
+    private static CartItem.ItemType parseItemType(String raw) {
+        try {
+            return CartItem.ItemType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown item type '" + raw + "'. Use PRODUCT, BUNDLE or CUSTOM_ROOM.");
+        }
+    }
+
+    // ── Read ─────────────────────────────────────────────────────────────────
+
+    @Transactional
     public CartResponseDTO getCartSummary(Long userId) {
-
         Cart cart = getOrCreateCart(userId);
-        List<CartItem> lines = cartItemRepository.findByCartId(cart.getId());
+        List<PricedLine> priced = priceLines(cart);
 
-        List<CartResponseDTO.CartLineDTO> lineDTOs = new ArrayList<>();
-        double grandTotal = 0.0;
-
-        for (CartItem line : lines) {
-
-            InventoryItem item;
-            String itemType;
-            Long itemId;
-
-            if (line.getItemType() == CartItem.ItemType.PRODUCT && line.getProduct() != null) {
-                item = line.getProduct();
-                itemType = "PRODUCT";
-                itemId = line.getProduct().getId();
-            } else if (line.getItemType() == CartItem.ItemType.BUNDLE && line.getBundle() != null) {
-                item = line.getBundle();
-                itemType = "BUNDLE";
-                itemId = line.getBundle().getId();
-            } else if (line.getItemType() == CartItem.ItemType.CUSTOM_ROOM && line.getCustomRoom() != null) {
-                item = line.getCustomRoom();
-                itemType = "CUSTOM_ROOM";
-                itemId = line.getCustomRoom().getId();
-            } else {
-                log.warn("CartManager: orphaned CartItem id={} skipped", line.getId());
-                continue;
-            }
-
-            double unitPrice = item.getPrice();
-            double lineTotal = unitPrice * line.getQuantity();
-            grandTotal += lineTotal;
-
-            // ❌ REMOVED CartResponseDTO.CartLineDTO.builder() -> REPLACED with custom
-            // constructor or setters
-            CartResponseDTO.CartLineDTO lineDTO = new CartResponseDTO.CartLineDTO();
-            lineDTO.setCartItemId(line.getId());
-            lineDTO.setItemType(itemType);
-            lineDTO.setItemId(itemId);
-            lineDTO.setItemName(item.getName());
-            lineDTO.setQuantity(line.getQuantity());
-            lineDTO.setUnitPrice(unitPrice);
-            lineDTO.setLineTotal(lineTotal);
-
-            List<String> subItems = null;
-            if (line.getItemType() == CartItem.ItemType.BUNDLE && line.getBundle() != null) {
-                subItems = line.getBundle().getProducts().stream()
-                        .map(com.palette.palette.entities.Product::getName)
-                        .collect(java.util.stream.Collectors.toList());
-            } else if (line.getItemType() == CartItem.ItemType.CUSTOM_ROOM && line.getCustomRoom() != null) {
-                subItems = new java.util.ArrayList<>(line.getCustomRoom().getFurnitureItems());
-            }
-            lineDTO.setSubItems(subItems);
-
-            lineDTOs.add(lineDTO);
+        List<CartResponseDTO.CartLineDTO> lines = new ArrayList<>();
+        for (PricedLine p : priced) {
+            CartResponseDTO.CartLineDTO dto = new CartResponseDTO.CartLineDTO();
+            dto.setCartItemId(p.line().getId());
+            dto.setItemType(p.line().getItemType().name());
+            dto.setItemId(p.item().getId());
+            dto.setItemName(p.item().getName());
+            dto.setQuantity(p.line().getQuantity());
+            dto.setUnitPrice(p.unitPrice());
+            dto.setLineTotal(p.lineTotal());
+            dto.setSubItems(subItems(p.item()));
+            lines.add(dto);
         }
 
-        // ❌ REMOVED CartResponseDTO.builder() -> REPLACED with setters
         CartResponseDTO response = new CartResponseDTO();
         response.setCartId(cart.getId());
         response.setUserId(userId);
-        response.setLines(lineDTOs);
-        response.setGrandTotal(grandTotal);
-
+        response.setLines(lines);
+        response.setGrandTotal(priced.stream().mapToDouble(PricedLine::lineTotal).sum());
         return response;
     }
 
-    // ── Remove Item ────────────────────────────────────────────────────────────
-    @Transactional
-    public void removeItemFromCart(Long userId, Long cartItemId) {
-        Cart cart = getOrCreateCart(userId);
-        CartItem item = cartItemRepository.findById(cartItemId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Cart item not found with id: " + cartItemId));
-
-        if (!item.getCart().getId().equals(cart.getId())) {
-            throw new IllegalArgumentException(
-                    "Cart item " + cartItemId + " does not belong to user " + userId);
+    /** Prices every line at the item's current price. Lines whose item was deleted are skipped. */
+    public List<PricedLine> priceLines(Cart cart) {
+        List<PricedLine> priced = new ArrayList<>();
+        for (CartItem line : cart.getItems()) {
+            InventoryItem item = switch (line.getItemType()) {
+                case PRODUCT -> line.getProduct();
+                case BUNDLE -> line.getBundle();
+                case CUSTOM_ROOM -> line.getCustomRoom();
+                case DESIGNER_HIRE -> null;
+            };
+            if (item == null) {
+                log.warn("Skipping cart line {}: its item no longer exists", line.getId());
+                continue;
+            }
+            priced.add(new PricedLine(line, item, item.getPrice()));
         }
-
-        log.info("ABOUT TO DELETE cartItemId={}", cartItemId);
-
-        // 1. CRITICAL: Remove the item from the parent Cart's collection in memory
-        if (cart.getItems() != null) {
-            cart.getItems().remove(item);
-        }
-
-        // 2. Clear the child's reference to the parent
-        item.setCart(null);
-
-        // 3. Now perform the standard Spring Data delete (you can remove the
-        // EntityManager test code)
-        cartItemRepository.delete(item);
-        cartItemRepository.flush(); // Force the SQL to fire right now
-
-        log.info("DELETE CALL COMPLETED for cartItemId={}", cartItemId);
-
-        // 4. Save the updated cart to the database and update your session cache
-        Cart savedCart = cartRepository.save(cart);
-        activeCartSessions.put(userId, savedCart);
-
-        log.info("CartManager: removed item {} from cart {}", cartItemId, cart.getId());
+        return priced;
     }
 
-    // ── Clear Cart ─────────────────────────────────────────────────────────────
+    private static List<String> subItems(InventoryItem item) {
+        if (item instanceof FurnitureBundle bundle) {
+            return bundle.getProducts().stream().map(Product::getName).toList();
+        }
+        if (item instanceof CustomRoom room) {
+            return List.copyOf(room.getFurnitureItems());
+        }
+        return null;
+    }
+
+    // ── Remove ───────────────────────────────────────────────────────────────
+
+    @Transactional
+    public CartResponseDTO removeItemFromCart(Long userId, Long cartItemId) {
+        Cart cart = getOrCreateCart(userId);
+        CartItem line = cart.getItems().stream()
+                .filter(item -> item.getId().equals(cartItemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found with id: " + cartItemId));
+
+        cart.getItems().remove(line); // orphanRemoval deletes the row
+        return getCartSummary(userId);
+    }
+
     @Transactional
     public void clearCart(Long userId) {
-        Cart cart = getOrCreateCart(userId);
-        cartItemRepository.deleteByCartId(cart.getId());
-        activeCartSessions.remove(userId);
-        log.info("CartManager: cart cleared for userId={}", userId);
+        getOrCreateCart(userId).getItems().clear();
     }
 }

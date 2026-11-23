@@ -1,13 +1,23 @@
 package com.palette.palette.controller;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.palette.palette.dto.CartItemRequestDTO;
 import com.palette.palette.dto.CartResponseDTO;
+import com.palette.palette.security.CurrentUserId;
 import com.palette.palette.services.CartManager;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
+/** The logged-in user's cart. Every endpoint returns the updated cart. */
 @RestController
 @RequestMapping("/api/cart")
 @RequiredArgsConstructor
@@ -15,40 +25,25 @@ public class CartController {
 
     private final CartManager cartManager;
 
-    // POST /api/cart/add?userId=1
-    // Body: { "itemId": 3, "quantity": 2, "itemType": "PRODUCT" }
-    @PostMapping("/add")
-    public ResponseEntity<String> addItemToCart(
-            @RequestParam Long userId,
-            @Valid @RequestBody CartItemRequestDTO dto) {
-
-        cartManager.addItemToCart(userId, dto);
-        return ResponseEntity.ok("Item added to cart successfully.");
-    }
-
-    // GET /api/cart?userId=1
-    // Returns full cart snapshot with composite-calculated totals
     @GetMapping
-    public ResponseEntity<CartResponseDTO> getCart(@RequestParam Long userId) {
-        CartResponseDTO summary = cartManager.getCartSummary(userId);
-        return ResponseEntity.ok(summary);
+    public CartResponseDTO getCart(@CurrentUserId Long userId) {
+        return cartManager.getCartSummary(userId);
     }
 
-    // DELETE /api/cart/remove/{cartItemId}?userId=1
+    @PostMapping("/add")
+    public CartResponseDTO addItemToCart(@CurrentUserId Long userId,
+                                         @Valid @RequestBody CartItemRequestDTO dto) {
+        return cartManager.addItemToCart(userId, dto);
+    }
+
     @DeleteMapping("/remove/{cartItemId}")
-    public ResponseEntity<String> removeItem(
-            @PathVariable Long cartItemId,
-            @RequestParam Long userId) {
-
-        cartManager.removeItemFromCart(userId, cartItemId);
-        return ResponseEntity.ok("Item removed from cart.");
+    public CartResponseDTO removeItem(@CurrentUserId Long userId, @PathVariable Long cartItemId) {
+        return cartManager.removeItemFromCart(userId, cartItemId);
     }
 
-    // DELETE /api/cart/clear?userId=1
-    // Called internally after order is placed
     @DeleteMapping("/clear")
-    public ResponseEntity<String> clearCart(@RequestParam Long userId) {
+    public ResponseEntity<Void> clearCart(@CurrentUserId Long userId) {
         cartManager.clearCart(userId);
-        return ResponseEntity.ok("Cart cleared.");
+        return ResponseEntity.noContent().build();
     }
 }

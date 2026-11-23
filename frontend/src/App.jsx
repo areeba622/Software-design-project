@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom"
 import LandingPage from "./LandingPage"
 import Login from "./pages/Login"
@@ -11,6 +11,7 @@ import DesignersPage from "./pages/Designers"
 import PaymentPage from "./pages/PaymentPage"
 import ProductDetails from "./pages/ProductDetails"
 import Orders from "./pages/Orders"
+import { loadSession, saveSession, clearSession, UNAUTHORIZED_EVENT } from "./config/api"
 
 function ProtectedRoute({ user, children }) {
   if (!user) return <Navigate to="/login" replace />
@@ -18,26 +19,11 @@ function ProtectedRoute({ user, children }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem("palette_user")
-      return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
-  })
+  const [user, setUser] = useState(loadSession)
   const [pendingCart, setPendingCart] = useState(null)
 
   // ── Global currency — set on Dashboard, persists across all pages ──────────
-  const [currency, setCurrency] = useState(() => {
-    try {
-      const saved = localStorage.getItem("palette_user")
-      const parsed = saved ? JSON.parse(saved) : null
-      return parsed?.currencyPreference || 'PKR'
-    } catch {
-      return 'PKR'
-    }
-  })
+  const [currency, setCurrency] = useState(() => loadSession()?.currencyPreference || 'PKR')
 
   // ── Room filter — set when user clicks a Room Bundle card on Dashboard ─────
   const [catalogRoomFilter, setCatalogRoomFilter] = useState(null)
@@ -52,26 +38,25 @@ export default function App() {
 
   const handleAuth = (userData) => {
     setUser(userData)
-    try {
-      localStorage.setItem("palette_user", JSON.stringify(userData))
-    } catch (e) {
-      console.error("Failed to save auth to localStorage", e)
-    }
+    saveSession(userData)
     if (userData?.currencyPreference) setCurrency(userData.currencyPreference)
     navigate("/dashboard")
   }
 
-  const handleLogout = () => {
+  const handleLogout = useCallback((redirectTo = "/") => {
     setUser(null)
-    try {
-      localStorage.removeItem("palette_user")
-    } catch (e) {
-      console.error("Failed to clear auth from localStorage", e)
-    }
+    clearSession()
     setCatalogRoomFilter(null)
     setCatalogStyleFilter(null)
-    navigate("/")
-  }
+    navigate(redirectTo)
+  }, [navigate])
+
+  // The API answered 401 (token expired or invalid): sign out and go to login.
+  useEffect(() => {
+    const onUnauthorized = () => handleLogout("/login")
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized)
+  }, [handleLogout])
 
   const handleGoToPayment = (cart) => {
     setPendingCart(cart)
@@ -116,7 +101,7 @@ export default function App() {
                 if (targetPage === "landing") navigate("/")
                 else navigate(`/${targetPage}`)
               }}
-              onLogout={handleLogout}
+              onLogout={() => handleLogout()}
             />
           </ProtectedRoute>
         }
@@ -133,7 +118,7 @@ export default function App() {
               initialStyleFilter={catalogStyleFilter}
               onQuiz={() => navigate("/quiz")}
               onRoomBuilder={() => navigate("/room-builder")}
-              onLogout={handleLogout}
+              onLogout={() => handleLogout()}
               onBack={() => navigate("/dashboard")}
               onCheckout={handleGoToPayment}
               onNavigate={(page) => navigate(`/${page}`)}
@@ -233,7 +218,7 @@ export default function App() {
               initialCategoryFilter="FLOORING"
               onQuiz={() => navigate("/quiz")}
               onRoomBuilder={() => navigate("/room-builder")}
-              onLogout={handleLogout}
+              onLogout={() => handleLogout()}
               onBack={() => navigate("/dashboard")}
               onCheckout={handleGoToPayment}
               onNavigate={(page) => navigate(`/${page}`)}

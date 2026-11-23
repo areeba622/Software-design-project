@@ -1,22 +1,29 @@
-// src/main/java/com/palette/palette/dto/RoomBuilderRequestDTO.java
-
 package com.palette.palette.dto;
 
-import jakarta.validation.constraints.*;
 import java.util.List;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 /**
- * Request DTO for building a custom room.
- * 
- * Contains user input from the room builder wizard:
- * - Step 1: roomType, width, length (mandatory)
- * - Step 2: flooring (optional)
- * - Step 3: furnitureItems (list of product names/IDs selected)
+ * Design a room. Flooring, wallpaper and furniture are chosen by product id,
+ * so prices always come from the catalogue.
  */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoomBuilderRequestDTO {
 
+    /** BEDROOM, LIVING_ROOM, KITCHEN, DINING_ROOM, ... */
     @NotBlank(message = "Room type is required")
-    private String roomType;  // e.g., "BEDROOM", "LIVING_ROOM"
+    private String roomType;
 
     @NotNull(message = "Width is required")
     @Min(value = 1, message = "Width must be at least 1 foot")
@@ -28,53 +35,13 @@ public class RoomBuilderRequestDTO {
     @Max(value = 100, message = "Length cannot exceed 100 feet")
     private Integer length;
 
-    private String flooring;  // Optional: e.g., "Hardwood", "Tile"
-    
-    private String wallpaper; // Optional: e.g., "Floral", "Geometric"
+    /** Optional: a FLOORING product. */
+    private Long flooringProductId;
 
-    @NotEmpty(message = "At least one furniture item is required")
-    private List<String> furnitureItems;  // e.g., ["Bed", "Wardrobe", "Nightstand"]
+    /** Optional: a WALLPAPER product. */
+    private Long wallpaperProductId;
 
-    // ── Constructors ──────────────────────────────────────────────────────────
-    public RoomBuilderRequestDTO() {}
-
-    public RoomBuilderRequestDTO(String roomType, Integer width, Integer length, 
-                                 String flooring, String wallpaper, List<String> furnitureItems) {
-        this.roomType = roomType;
-        this.width = width;
-        this.length = length;
-        this.flooring = flooring;
-        this.wallpaper = wallpaper;
-        this.furnitureItems = furnitureItems;
-    }
-
-    // ── Getters & Setters ─────────────────────────────────────────────────────
-    public String getRoomType() { return roomType; }
-    public void setRoomType(String roomType) { this.roomType = roomType; }
-
-    public Integer getWidth() { return width; }
-    public void setWidth(Integer width) { this.width = width; }
-
-    public Integer getLength() { return length; }
-    public void setLength(Integer length) { this.length = length; }
-
-    public String getFlooring() { return flooring; }
-    public void setFlooring(String flooring) { this.flooring = flooring; }
-
-    public String getWallpaper() { return wallpaper; }
-    public void setWallpaper(String wallpaper) { this.wallpaper = wallpaper; }
-
-    public List<String> getFurnitureItems() { return furnitureItems; }
-    public void setFurnitureItems(List<String> furnitureItems) { this.furnitureItems = furnitureItems; }
-
-    @Override
-    public String toString() {
-        return "RoomBuilderRequestDTO{" +
-                "roomType='" + roomType + '\'' +
-                ", dimensions=" + width + "x" + length +
-                ", flooring='" + flooring + '\'' +
-                ", wallpaper='" + wallpaper + '\'' +
-                ", furnitureCount=" + (furnitureItems != null ? furnitureItems.size() : 0) +
-                '}';
-    }
+    @NotEmpty(message = "Pick at least one piece of furniture")
+    @Size(max = 30, message = "A room can have at most 30 furniture items")
+    private List<@NotNull Long> furnitureProductIds;
 }

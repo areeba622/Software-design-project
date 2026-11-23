@@ -1,28 +1,26 @@
 package com.palette.palette.services;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.UUID;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import com.palette.palette.dto.AuthResponseDTO;
 import com.palette.palette.dto.CartItemRequestDTO;
 import com.palette.palette.dto.CartResponseDTO;
-import com.palette.palette.dto.OrderRequestDTO;
 import com.palette.palette.dto.OrderResponseDTO;
 import com.palette.palette.dto.PaymentRequestDTO;
 import com.palette.palette.dto.PaymentResponseDTO;
-import com.palette.palette.dto.RegisterRequestDTO;
 import com.palette.palette.entities.Order;
-import com.palette.palette.entities.User.CurrencyPreference;
+import com.palette.palette.exceptions.ResourceNotFoundException;
 import com.palette.palette.repository.OrderRepository;
+import com.palette.palette.repository.PaymentRepository;
 
 /**
- * End-to-end checkout through the real services and database:
+ * Checkout through the real services and database:
  * register -> add to cart -> create order -> pay.
  * Seed prices used: product 1 = 45,000 PKR, product 6 = 12,000 PKR.
  */
@@ -34,20 +32,16 @@ class CheckoutFlowTest {
     @Autowired private OrderService orderService;
     @Autowired private PaymentService paymentService;
     @Autowired private OrderRepository orderRepository;
+    @Autowired private PaymentRepository paymentRepository;
 
     private Long userId;
 
     @BeforeEach
     void registerFreshUser() {
-        RegisterRequestDTO register = new RegisterRequestDTO();
-        register.setFullName("Test Shopper");
-        register.setEmail("shopper-" + UUID.randomUUID() + "@example.com");
-        register.setPassword("secret123");
-        register.setCurrencyPreference(CurrencyPreference.PKR);
-
-        AuthResponseDTO user = authService.register(register);
-        userId = user.getUserId();
+        userId = TestUsers.register(authService).getUserId();
     }
+
+    // ── Cart ─────────────────────────────────────────────────────────────────
 
     @Test
     void cartTotalsAddUpAcrossLines() {
@@ -59,10 +53,8 @@ class CheckoutFlowTest {
 
     @Test
     void addingTheSameProductTwiceIncreasesQuantity() {
-        cartManager.addItemToCart(userId, new CartItemRequestDTO(6L, 1, "PRODUCT", null));
-        cartManager.addItemToCart(userId, new CartItemRequestDTO(6L, 2, "PRODUCT", null));
-
-        CartResponseDTO cart = cartManager.getCartSummary(userId);
+        cartManager.addItemToCart(userId, product(6L, 1));
+        CartResponseDTO cart = cartManager.addItemToCart(userId, product(6L, 2));
 
         assertThat(cart.getLines()).singleElement()
                 .satisfies(line -> assertThat(line.getQuantity()).isEqualTo(3));
@@ -70,10 +62,39 @@ class CheckoutFlowTest {
     }
 
     @Test
-    void checkoutCreatesAPendingOrderAndEmptiesTheCart() {
-        CartResponseDTO cart = fillCart();
+    void quantityIsCappedPerItem() {
+        cartManager.addItemToCart(userId, product(6L, 60));
 
-        OrderResponseDTO order = orderService.createOrderFromCart(new OrderRequestDTO(userId, cart.getCartId()));
+        assertThatThrownBy(() -> cartManager.addItemToCart(userId, product(6L, 60)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void removingALineReturnsTheUpdatedCart() {
+        CartResponseDTO cart = fillCart();
+        Long firstLine = cart.getLines().get(0).getCartItemId();
+
+        CartResponseDTO after = cartManager.removeItemFromCart(userId, firstLine);
+
+        assertThat(after.getLines()).hasSize(1);
+    }
+
+    @Test
+    void cannotRemoveSomeoneElsesCartLine() {
+        Long otherUser = TestUsers.register(authService).getUserId();
+        Long theirLine = cartManager.addItemToCart(otherUser, product(6L, 1)).getLines().get(0).getCartItemId();
+
+        assertThatThrownBy(() -> cartManager.removeItemFromCart(userId, theirLine))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── Orders ───────────────────────────────────────────────────────────────
+
+    @Test
+    void checkoutCreatesAPendingOrderAndEmptiesTheCart() {
+        fillCart();
+
+        OrderResponseDTO order = orderService.createOrderFromCart(userId);
 
         assertThat(order.getStatus()).isEqualTo(Order.OrderStatus.PENDING);
         assertThat(order.getGrandTotal()).isEqualTo(102_000);
@@ -82,56 +103,109 @@ class CheckoutFlowTest {
     }
 
     @Test
-    void successfulPaymentConfirmsTheOrder() {
+    void checkoutWithAnEmptyCartIsRejected() {
+        assertThatThrownBy(() -> orderService.createOrderFromCart(userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("empty");
+    }
+
+    @Test
+    void usersOnlySeeTheirOwnOrders() {
+        OrderResponseDTO order = placeOrder();
+        Long otherUser = TestUsers.register(authService).getUserId();
+
+        assertThat(orderService.getUserOrders(otherUser)).isEmpty();
+        assertThatThrownBy(() -> orderService.getOrderById(order.getOrderId(), otherUser))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── Payments ─────────────────────────────────────────────────────────────
+
+    @Test
+    void successfulPaymentChargesTheOrderTotalAndConfirmsTheOrder() {
         OrderResponseDTO order = placeOrder();
 
-        PaymentResponseDTO payment = paymentService.processPayment(paymentFor(order, "JAZZCASH"));
+        PaymentResponseDTO payment = paymentService.processPayment(userId, pay(order, "JAZZCASH"));
 
         assertThat(payment.getStatus()).isEqualTo("SUCCESS");
+        assertThat(payment.getAmountInPKR()).isEqualTo(102_000);
         assertThat(payment.getTransactionId()).startsWith("jazzcash_");
-        assertThat(orderRepository.findById(order.getOrderId()).orElseThrow().getStatus())
-                .isEqualTo(Order.OrderStatus.CONFIRMED);
+        assertThat(statusOf(order)).isEqualTo(Order.OrderStatus.CONFIRMED);
     }
 
     @Test
     void stripePaymentAlsoRecordsTheUsdAmount() {
         OrderResponseDTO order = placeOrder();
 
-        PaymentResponseDTO payment = paymentService.processPayment(paymentFor(order, "STRIPE"));
+        PaymentResponseDTO payment = paymentService.processPayment(userId, pay(order, "stripe"));
 
         assertThat(payment.getStatus()).isEqualTo("SUCCESS");
-        assertThat(payment.getAmountInUSD()).isCloseTo(102_000 / 280.0, org.assertj.core.data.Offset.offset(0.01));
+        assertThat(payment.getAmountInUSD()).isCloseTo(102_000 / 280.0, within(0.01));
     }
 
     @Test
-    void failedPaymentIsRecordedInsteadOfCrashing() {
+    void anOrderCannotBePaidTwice() {
+        OrderResponseDTO order = placeOrder();
+        paymentService.processPayment(userId, pay(order, "JAZZCASH"));
+
+        assertThatThrownBy(() -> paymentService.processPayment(userId, pay(order, "JAZZCASH")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void failedPaymentKeepsTheOrderOpenSoTheCustomerCanRetry() {
         OrderResponseDTO order = placeOrder();
 
-        // ALFABANK passes validation but the gateway is not implemented, so the charge fails.
-        PaymentResponseDTO payment = paymentService.processPayment(paymentFor(order, "ALFABANK"));
+        // ALFABANK is a known gateway but not implemented, so the charge fails.
+        PaymentResponseDTO failed = paymentService.processPayment(userId, pay(order, "ALFABANK"));
+        assertThat(failed.getStatus()).isEqualTo("FAILED");
+        assertThat(statusOf(order)).isEqualTo(Order.OrderStatus.PENDING);
 
-        assertThat(payment.getStatus()).isEqualTo("FAILED");
-        assertThat(payment.getPaymentId()).isNotNull();
+        PaymentResponseDTO retried = paymentService.processPayment(userId, pay(order, "STRIPE"));
+        assertThat(retried.getStatus()).isEqualTo("SUCCESS");
+        assertThat(retried.getPaymentId()).isEqualTo(failed.getPaymentId()); // one record per order
+        assertThat(paymentRepository.findByOrderId(order.getOrderId())).isPresent();
+        assertThat(statusOf(order)).isEqualTo(Order.OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    void unknownPaymentMethodIsRejected() {
+        OrderResponseDTO order = placeOrder();
+
+        assertThatThrownBy(() -> paymentService.processPayment(userId, pay(order, "PAYPAL")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void nobodyCanPayForSomeoneElsesOrder() {
+        OrderResponseDTO order = placeOrder();
+        Long otherUser = TestUsers.register(authService).getUserId();
+
+        assertThatThrownBy(() -> paymentService.processPayment(otherUser, pay(order, "STRIPE")))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    private static CartItemRequestDTO product(Long id, int quantity) {
+        return new CartItemRequestDTO(id, quantity, "PRODUCT");
+    }
+
     private CartResponseDTO fillCart() {
-        cartManager.addItemToCart(userId, new CartItemRequestDTO(1L, 2, "PRODUCT", null));
-        cartManager.addItemToCart(userId, new CartItemRequestDTO(6L, 1, "PRODUCT", null));
-        return cartManager.getCartSummary(userId);
+        cartManager.addItemToCart(userId, product(1L, 2));
+        return cartManager.addItemToCart(userId, product(6L, 1));
     }
 
     private OrderResponseDTO placeOrder() {
-        CartResponseDTO cart = fillCart();
-        return orderService.createOrderFromCart(new OrderRequestDTO(userId, cart.getCartId()));
+        fillCart();
+        return orderService.createOrderFromCart(userId);
     }
 
-    private static PaymentRequestDTO paymentFor(OrderResponseDTO order, String gateway) {
-        PaymentRequestDTO dto = new PaymentRequestDTO();
-        dto.setOrderId(order.getOrderId());
-        dto.setGatewayType(gateway);
-        dto.setAmountInPKR(order.getGrandTotal());
-        return dto;
+    private static PaymentRequestDTO pay(OrderResponseDTO order, String gateway) {
+        return new PaymentRequestDTO(order.getOrderId(), gateway);
+    }
+
+    private Order.OrderStatus statusOf(OrderResponseDTO order) {
+        return orderRepository.findById(order.getOrderId()).orElseThrow().getStatus();
     }
 }

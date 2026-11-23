@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiLoader } from 'react-icons/fi'
 import { OrderSuccessCard } from '../components/OrderSuccessCard'
-import { API_ENDPOINTS } from '../config/api'
+import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -147,27 +147,9 @@ export default function PaymentPage({ user, cart, onBack }) {
 
     const createOrder = async () => {
       try {
-        // Fallback: if cart.cartId is missing (e.g. RoomBuilder passed a raw room object),
-        // fetch the latest cart for this user to obtain a valid cartId before creating the order.
-        let cartId = cart?.cartId
-        if (!cartId && user?.userId) {
-          const cartRes = await fetch(API_ENDPOINTS.CART(user.userId))
-          if (cartRes.ok) {
-            const freshCart = await cartRes.json()
-            cartId = freshCart?.cartId
-          }
-        }
-        if (!cartId) throw new Error('No cart found — please add items to your cart before checking out.')
-
-        const res = await fetch(API_ENDPOINTS.ORDER_CREATE, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.userId, cartId }),
-        })
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(`Order creation failed: ${errText}`)
-        }
+        // The server turns the logged-in user's own cart into an order.
+        const res = await authFetch(API_ENDPOINTS.ORDER_CREATE, { method: 'POST' })
+        if (!res.ok) throw new Error(await errorMessage(res, 'Could not create your order.'))
         const data = await res.json()
         setOrder(data)
         setScreen('select-gateway')
@@ -185,14 +167,10 @@ export default function PaymentPage({ user, cart, onBack }) {
     setScreen('processing')
 
     try {
-      const res = await fetch(API_ENDPOINTS.PAYMENT_PROCESS, {
+      // No amount is sent: the server always charges the order's own total.
+      const res = await authFetch(API_ENDPOINTS.PAYMENT_PROCESS, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.orderId,
-          gatewayType: selectedGateway,
-          amountInPKR: order.grandTotal,
-        }),
+        body: JSON.stringify({ orderId: order.orderId, gatewayType: selectedGateway }),
       })
 
       if (!res.ok) {

@@ -19,7 +19,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByNameContainingIgnoreCase(String keyword);
     List<Product> findByBundleIsNull();
     List<Product> findByVendorName(String vendorName);
-    java.util.Optional<Product> findByName(String name);
 
     // ── Layer 2: Quiz & Room Filtering ────────────────────────────────────────
     List<Product> findByRoomType(Product.RoomType roomType);

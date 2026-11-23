@@ -11,8 +11,8 @@ public class StripeAdapter implements LocalPaymentProcessor {
 
     private final StripeSDK stripeSDK;
 
-    // Fixed exchange rate: 1 USD = 280 PKR
-    private static final double PKR_TO_USD_RATE = 280.0;
+    /** Fixed demo exchange rate: 1 USD = 280 PKR. */
+    public static final double PKR_TO_USD_RATE = 280.0;
 
     // Constructors
     public StripeAdapter() {
@@ -49,7 +49,7 @@ public class StripeAdapter implements LocalPaymentProcessor {
         return PKR_TO_USD_RATE;
     }
 
-    public double convertPKRToUSD(double amountInPKR) {
+    public static double convertPKRToUSD(double amountInPKR) {
         return amountInPKR / PKR_TO_USD_RATE;
     }
 

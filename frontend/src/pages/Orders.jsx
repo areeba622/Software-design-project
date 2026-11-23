@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiPackage, FiChevronDown } from 'react-icons/fi'
-import { API_BASE_URL, API_ENDPOINTS } from '../config/api'
+import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
 
 // ─── Design Tokens (matching PaymentPage.jsx) ─────────────────────────────────
 const T = {
@@ -182,11 +182,8 @@ export default function Orders({ user, onBack }) {
 
         const fetchOrders = async () => {
             try {
-                const res = await fetch(API_ENDPOINTS.ORDERS_BY_USER(user.userId))
-                if (!res.ok) {
-                    const errText = await res.text()
-                    throw new Error(`Failed to load orders: ${errText}`)
-                }
+                const res = await authFetch(API_ENDPOINTS.ORDERS)
+                if (!res.ok) throw new Error(await errorMessage(res, 'Could not load your orders.'))
                 const data = await res.json()
                 if (!cancelled) {
                     // Most recent first

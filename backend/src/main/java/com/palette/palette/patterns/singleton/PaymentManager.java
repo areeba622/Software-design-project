@@ -1,131 +1,81 @@
 package com.palette.palette.patterns.singleton;
 
-import org.springframework.stereotype.Component;
+import java.util.Locale;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.palette.palette.patterns.adapter.JazzCashAdapter;
 import com.palette.palette.patterns.adapter.LocalPaymentProcessor;
 import com.palette.palette.patterns.adapter.StripeAdapter;
 
 /**
- * Singleton: Thread-safe payment manager.
- * Single entry point for all payment processing across the entire application.
- * Uses double-checked locking pattern for lazy initialization.
- * Routes to appropriate Adapter (Stripe or JazzCash) based on gateway type.
+ * SINGLETON: the one entry point for charging money.
+ *
+ * <p>Lazy, thread-safe initialisation with double-checked locking. Spring does
+ * not construct this class itself: {@code PaymentConfig} registers
+ * {@link #getInstance()} as the bean, so the app and any plain-Java caller
+ * share exactly one instance.</p>
+ *
+ * <p>It picks the right {@link LocalPaymentProcessor} adapter (Adapter pattern)
+ * for the gateway the customer chose.</p>
  */
-@Component
-public class PaymentManager {
+public final class PaymentManager {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentManager.class);
 
     private static volatile PaymentManager instance;
-    private static final Object lock = new Object();
 
-    // Private constructor — enforces singleton
     private PaymentManager() {
-        System.out.println("PaymentManager singleton instance created.");
+        log.info("PaymentManager singleton created");
     }
 
-    /**
-     * Thread-safe getInstance using double-checked locking.
-     * Ensures only one PaymentManager exists across the entire JVM.
-     */
     public static PaymentManager getInstance() {
-        if (instance == null) { // 1st check (no lock)
-            synchronized (lock) { // acquire lock
-                if (instance == null) { // 2nd check (with lock)
-                    instance = new PaymentManager();
+        PaymentManager result = instance;
+        if (result == null) {                       // 1st check, no lock
+            synchronized (PaymentManager.class) {
+                result = instance;
+                if (result == null) {               // 2nd check, with lock
+                    instance = result = new PaymentManager();
                 }
             }
         }
-        return instance;
+        return result;
     }
 
     /**
-     * Process an order payment by routing to the correct gateway adapter.
+     * Charges {@code amountInPKR} through the named gateway.
      *
-     * @param gatewayType gateway name: "STRIPE" or "JAZZCASH"
-     * @param amountInPKR amount to charge in Pakistani Rupees
-     * @return transaction ID from the gateway
-     * @throws IllegalArgumentException if gateway type is unknown
+     * @return the gateway's transaction id
+     * @throws IllegalArgumentException for an unknown gateway or a non-positive amount
      */
     public String processOrder(String gatewayType, double amountInPKR) {
-
-        if (gatewayType == null || gatewayType.trim().isEmpty()) {
-            throw new IllegalArgumentException("Gateway type cannot be null or empty");
+        if (gatewayType == null || gatewayType.isBlank()) {
+            throw new IllegalArgumentException("Gateway type cannot be empty");
         }
-
-        if (amountInPKR <= 0) {
-            throw new IllegalArgumentException("Amount must be greater than 0");
-        }
-
-        String normalizedGateway = gatewayType.toUpperCase().trim();
-        LocalPaymentProcessor processor = selectAdapter(normalizedGateway);
-
-        System.out.println("PaymentManager: Processing PKR " + amountInPKR +
-                " via " + normalizedGateway);
-
-        String transactionId = processor.payInPKR(amountInPKR);
-
-        System.out.println("PaymentManager: Payment processed. TxID: " + transactionId);
-
-        return transactionId;
+        return processOrder(selectAdapter(gatewayType.trim().toUpperCase(Locale.ROOT)), amountInPKR);
     }
 
-    /**
-     * Select the appropriate adapter based on gateway type.
-     * This is where the Adapter pattern does its work.
-     */
-    private LocalPaymentProcessor selectAdapter(String gatewayType) {
-        switch (gatewayType) {
-            case "STRIPE":
-                System.out.println("PaymentManager: Selected StripeAdapter");
-                return new StripeAdapter();
-
-            case "JAZZCASH":
-                System.out.println("PaymentManager: Selected JazzCashAdapter");
-                return new JazzCashAdapter();
-
-            case "ALFABANK":
-                // Future gateway support
-                throw new IllegalArgumentException("ALFABANK not yet implemented");
-
-            default:
-                throw new IllegalArgumentException("Unknown gateway type: " + gatewayType);
-        }
-    }
-
-    /**
-     * Overloaded method: Process with explicit adapter instance.
-     * Useful for testing or custom adapter implementations.
-     */
+    /** Charges through a specific adapter (handy for tests or new gateways). */
     public String processOrder(LocalPaymentProcessor adapter, double amountInPKR) {
-
         if (adapter == null) {
             throw new IllegalArgumentException("Adapter cannot be null");
         }
-
         if (amountInPKR <= 0) {
             throw new IllegalArgumentException("Amount must be greater than 0");
         }
-
-        System.out.println("PaymentManager: Processing PKR " + amountInPKR +
-                " via custom adapter: " + adapter.getGatewayType());
-
+        log.info("Charging PKR {} via {}", amountInPKR, adapter.getGatewayType());
         String transactionId = adapter.payInPKR(amountInPKR);
-
-        System.out.println("PaymentManager: Payment processed. TxID: " + transactionId);
-
+        log.info("Charge succeeded: {}", transactionId);
         return transactionId;
     }
 
-    /**
-     * Health check: Verify PaymentManager is operational.
-     */
-    public boolean isHealthy() {
-        try {
-            return new StripeAdapter().getGatewayType() != null &&
-                    new JazzCashAdapter().getGatewayType() != null;
-        } catch (Exception e) {
-            System.err.println("PaymentManager health check failed: " + e.getMessage());
-            return false;
-        }
+    private static LocalPaymentProcessor selectAdapter(String gatewayType) {
+        return switch (gatewayType) {
+            case "STRIPE" -> new StripeAdapter();
+            case "JAZZCASH" -> new JazzCashAdapter();
+            case "ALFABANK" -> throw new IllegalArgumentException("ALFABANK is not supported yet");
+            default -> throw new IllegalArgumentException("Unknown gateway type: " + gatewayType);
+        };
     }
 }

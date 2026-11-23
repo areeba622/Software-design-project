@@ -1,12 +1,15 @@
 package com.palette.palette.services;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.palette.palette.dto.DesignQuizRequestDTO;
 import com.palette.palette.dto.DesignQuizResponseDTO;
 import com.palette.palette.dto.ProductDTO;
 import com.palette.palette.entities.DesignQuiz;
@@ -15,129 +18,95 @@ import com.palette.palette.entities.User;
 import com.palette.palette.exceptions.ResourceNotFoundException;
 import com.palette.palette.patterns.factory.AestheticBundleFactory;
 import com.palette.palette.patterns.factory.StyleBundle;
+import com.palette.palette.patterns.nullobject.NoStyleBundle;
 import com.palette.palette.repository.DesignQuizRepository;
 import com.palette.palette.repository.ProductRepository;
 import com.palette.palette.repository.UserRepository;
 
+import lombok.RequiredArgsConstructor;
+
 /**
- * DesignQuizService - UPDATED FOR BOHEMIAN, SCANDINAVIAN, MINIMALIST
+ * Style quiz: the Factory picks a curated bundle for (style, room). When the
+ * combination is unknown the Factory returns a {@link NoStyleBundle} (Null
+ * Object), and this service answers with an empty recommendation instead of
+ * an error.
  */
 @Service
+@RequiredArgsConstructor
 public class DesignQuizService {
 
     private final ProductRepository productRepository;
     private final DesignQuizRepository designQuizRepository;
     private final UserRepository userRepository;
 
-    public DesignQuizService(ProductRepository productRepository,
-            DesignQuizRepository designQuizRepository,
-            UserRepository userRepository) {
-        this.productRepository = productRepository;
-        this.designQuizRepository = designQuizRepository;
-        this.userRepository = userRepository;
-    }
-
+    /**
+     * @param userId the logged-in user, or {@code null} for a guest; only
+     *               logged-in users get their result saved
+     */
     @Transactional
-    public DesignQuizResponseDTO submitQuiz(DesignQuizRequestDTO dto, Long userId) {
-
-        if (dto.getStyle() == null || dto.getStyle().isBlank()) {
-            throw new IllegalArgumentException("Style cannot be empty");
+    public DesignQuizResponseDTO submitQuiz(String style, String roomType, Long userId) {
+        DesignQuizResponseDTO response = recommend(style, roomType);
+        boolean matched = !"NONE".equals(response.getAestheticStyle());
+        if (userId != null && matched) {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+            designQuizRepository.save(new DesignQuiz(user, response.getAestheticStyle(), response.getRoomType()));
         }
-
-        if (dto.getRoomType() == null || dto.getRoomType().isBlank()) {
-            throw new IllegalArgumentException("Room type cannot be empty");
-        }
-
-        String normalizedStyle = dto.getStyle().toUpperCase();
-        String normalizedRoom = dto.getRoomType().toUpperCase();
-
-        // ✅ FACTORY CREATES BUNDLE WITH UPDATED STYLES
-        StyleBundle styleBundle = AestheticBundleFactory.createBundle(
-                normalizedStyle,
-                normalizedRoom);
-
-        List<Product> productsInRoom = productRepository.findByRoomType(
-                Product.RoomType.valueOf(normalizedRoom));
-
-        List<ProductDTO> recommendedProducts = productsInRoom.stream()
-                .filter(p -> styleBundle.getRecommendedProductIds().contains(p.getId()))
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-
-        double totalPrice = recommendedProducts.stream()
-                .mapToDouble(ProductDTO::getPriceInPKR)
-                .sum();
-
-        double discountedPrice = totalPrice * styleBundle.getDiscountFactor();
-
-        if (userId != null) {
-            saveQuizHistory(userId, normalizedStyle, normalizedRoom);
-        }
-
-        String message = String.format(
-                "Perfect %s %s setup! %d items recommended at PKR %.0f (with discount)",
-                normalizedStyle,
-                normalizedRoom,
-                recommendedProducts.size(),
-                discountedPrice);
-
-        // Create BundleDTO from StyleBundle
-        DesignQuizResponseDTO.BundleDTO bundleDTO = new DesignQuizResponseDTO.BundleDTO(
-                null,
-                normalizedStyle,
-                styleBundle.getStyleDescription(),
-                styleBundle.getDiscountFactor(),
-                totalPrice);
-
-        // Create recommendation title
-        String recommendationTitle = normalizedStyle + " " + normalizedRoom;
-
-        DesignQuizResponseDTO response = new DesignQuizResponseDTO(
-                normalizedStyle,
-                normalizedRoom,
-                recommendationTitle,
-                message,
-                bundleDTO,
-                recommendedProducts);
-
         return response;
     }
 
-    @Transactional
-    public DesignQuizResponseDTO submitQuiz(DesignQuizRequestDTO dto) {
-        return submitQuiz(dto, null);
-    }
-
-    private void saveQuizHistory(Long userId, String style, String roomType) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found with id: " + userId));
-
-        DesignQuiz quiz = new DesignQuiz(user, style, roomType);
-        designQuizRepository.save(quiz);
-    }
-
+    /** Re-creates the recommendation for the user's most recent quiz. */
     @Transactional(readOnly = true)
-    public List<DesignQuiz> getUserQuizHistory(Long userId) {
-        return designQuizRepository.findByUserId(userId);
+    public DesignQuizResponseDTO getLatestRecommendation(Long userId) {
+        DesignQuiz latest = designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("You haven't taken the style quiz yet."));
+        return recommend(latest.getSelectedStyle(), latest.getSelectedRoomType());
     }
 
-        @Transactional(readOnly = true)
-    public DesignQuiz getLatestQuiz(Long userId) {
-        return designQuizRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No quiz found for user with id: " + userId));
+    private DesignQuizResponseDTO recommend(String style, String roomType) {
+        StyleBundle bundle = AestheticBundleFactory.createBundle(style, roomType);
+        if (bundle instanceof NoStyleBundle) {
+            return noMatch(bundle, roomType);
+        }
+
+        List<ProductDTO> products = loadInOrder(bundle.getRecommendedProductIds());
+        double fullPrice = products.stream().mapToDouble(ProductDTO::priceInPKR).sum();
+        double bundlePrice = fullPrice * bundle.getDiscountFactor();
+        String title = pretty(bundle.getStyleName()) + " " + pretty(bundle.getRoomType());
+
+        return new DesignQuizResponseDTO(
+                bundle.getStyleName(),
+                bundle.getRoomType(),
+                title,
+                String.format(Locale.ROOT, "Your %s: %d hand-picked pieces for PKR %,.0f as a bundle.",
+                        title, products.size(), bundlePrice),
+                new DesignQuizResponseDTO.BundleDTO(null, bundle.getStyleName(), bundle.getStyleDescription(),
+                        bundle.getDiscountFactor(), fullPrice),
+                products);
     }
 
-    private ProductDTO convertToDTO(Product product) {
-        ProductDTO dto = new ProductDTO(
-                product.getId(),
-                product.getName(),
-                product.getPriceInPKR(),
-                product.getCategory() != null ? product.getCategory().toString() : "OTHER",
-                product.getRoomType() != null ? product.getRoomType().toString() : "UNKNOWN",
-                product.getAestheticStyle() != null ? product.getAestheticStyle().toString() : null);
-        dto.setImageUrl(product.getImageUrl()); // ← ONLY CHANGE
-        return dto;
+    /** Products in the order the factory listed them; unknown ids are skipped. */
+    private List<ProductDTO> loadInOrder(List<Long> ids) {
+        Map<Long, Product> byId = productRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        return ids.stream().map(byId::get).filter(Objects::nonNull).map(ProductDTO::from).toList();
+    }
+
+    private static DesignQuizResponseDTO noMatch(StyleBundle nullBundle, String roomType) {
+        return new DesignQuizResponseDTO(
+                nullBundle.getStyleName(),
+                roomType == null ? nullBundle.getRoomType() : roomType.toUpperCase(Locale.ROOT),
+                "No curated set yet",
+                "We don't have a curated set for that combination yet. Browse the full catalogue instead.",
+                new DesignQuizResponseDTO.BundleDTO(null, nullBundle.getStyleName(),
+                        nullBundle.getStyleDescription(), nullBundle.getDiscountFactor(), 0.0),
+                List.of());
+    }
+
+    /** LIVING_ROOM → "Living Room". */
+    private static String pretty(String constant) {
+        return java.util.Arrays.stream(constant.toLowerCase(Locale.ROOT).split("_"))
+                .map(word -> Character.toUpperCase(word.charAt(0)) + word.substring(1))
+                .collect(Collectors.joining(" "));
     }
 }

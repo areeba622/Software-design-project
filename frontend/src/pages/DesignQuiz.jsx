@@ -8,7 +8,7 @@ import {
   FaDoorClosed, FaImage, FaPalette,
 } from 'react-icons/fa'
 
-import { API_BASE_URL } from '../config/api'
+import { API_ENDPOINTS, authFetch, errorMessage } from '../config/api'
 
 const T = {
   ink: "#0F172A",
@@ -535,8 +535,8 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
     if (!user) { showMsg('Please log in to add items to cart.', false); return }
     setAddingToCart(product.id)
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/add?userId=${user.userId}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await authFetch(API_ENDPOINTS.CART_ADD, {
+        method: 'POST',
         body: JSON.stringify({ itemId: product.id, quantity: 1, itemType: 'PRODUCT' }),
       })
       if (!res.ok) throw new Error()
@@ -553,10 +553,11 @@ function RecommendationView({ recommendation, style, room, user, onBack, onGoHom
     setAddingToCart('all')
     try {
       for (const p of products) {
-        await fetch(`${API_BASE_URL}/api/cart/add?userId=${user.userId}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const res = await authFetch(API_ENDPOINTS.CART_ADD, {
+          method: 'POST',
           body: JSON.stringify({ itemId: p.id, quantity: 1, itemType: 'PRODUCT' }),
         })
+        if (!res.ok) throw new Error()
       }
       setAddedIds(products.map(p => p.id))
       showMsg(`All ${products.length} products added!`)
@@ -787,16 +788,12 @@ export default function DesignQuiz({ user, onBack }) {
     setError(null)
     setSelectedRoom(room)
     try {
-      const url = user
-        ? `${API_BASE_URL}/api/design-quiz/submit?userId=${user.userId}`
-        : `${API_BASE_URL}/api/design-quiz/submit`
-
-      const res = await fetch(url, {
+      // Logged-in users send their token so the result is saved to their profile.
+      const res = await authFetch(API_ENDPOINTS.QUIZ_SUBMIT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ style, roomType: room }),
       })
-      if (!res.ok) throw new Error(`Server error: ${res.statusText}`)
+      if (!res.ok) throw new Error(await errorMessage(res, 'Could not get your recommendations.'))
       const data = await res.json()
       setRecommendation(data)
       setPhase('recommendation')

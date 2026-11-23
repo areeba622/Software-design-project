@@ -18,7 +18,11 @@ import {
     FaCouch, FaBed, FaUtensils, FaWineGlassAlt, FaGamepad, FaBriefcase,
     FaChair, FaLightbulb, FaLayerGroup, FaDoorClosed, FaImage, FaPalette,
 } from 'react-icons/fa'
-import { API_ENDPOINTS } from '../config/api'
+import { API_ENDPOINTS, WALL_HEIGHT_FT, authFetch, errorMessage } from '../config/api'
+
+// Same formulas as RoomBuilderService on the backend.
+const floorArea = (w, l) => (w || 0) * (l || 0)
+const wallArea = (w, l) => 2 * ((w || 0) + (l || 0)) * WALL_HEIGHT_FT
 
 import WarmHardwood from '../assets/floors/WarmHardwood.jpg'
 import MattePorcelainTile from '../assets/floors/MattePorcelainTile.png'
@@ -320,7 +324,7 @@ function Step3Wallpaper({ roomType, wallpaperProducts, area, onSubmit, onBack })
                             className="absolute bottom-6 left-6 right-6 sm:right-auto sm:w-72 rounded-2xl p-5"
                             style={{ background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.25)', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}
                         >
-                            <p style={{ fontFamily: FONT }} className="text-[10px] uppercase tracking-widest text-white/70 font-bold mb-1">Total Area</p>
+                            <p style={{ fontFamily: FONT }} className="text-[10px] uppercase tracking-widest text-white/70 font-bold mb-1">Wall Area</p>
                             <p style={{ fontFamily: FONT }} className="text-2xl font-extrabold text-white">{area.toLocaleString()} sq ft</p>
                         </motion.div>
                     )}
@@ -560,11 +564,11 @@ function Step4Products({ roomType, products, selectedProducts, loading, error, o
 // STEP 5 — REVIEW
 // ═══════════════════════════════════════════════════════════════════════════
 function ReviewRoom({ roomType, width, length, flooring, wallpaper, flooringProducts, wallpaperProducts, selectedProducts, loading, error, onBuild, onBack }) {
-    const area = (width || 0) * (length || 0)
+    const area = floorArea(width, length)
 
-    // Calculate accurate prices based on area
+    // Flooring is priced per sq ft of floor, wallpaper per sq ft of wall
     const floorPrice = flooring ? (flooringProducts.find(f => f.name === flooring)?.priceInPKR || 0) * area : 0
-    const wallPrice = wallpaper ? (wallpaperProducts.find(w => w.name === wallpaper)?.priceInPKR || 0) * area : 0
+    const wallPrice = wallpaper ? (wallpaperProducts.find(w => w.name === wallpaper)?.priceInPKR || 0) * wallArea(width, length) : 0
     const furnPrice = selectedProducts.reduce((sum, p) => sum + (p?.priceInPKR || 0), 0)
 
     const estimatedTotal = floorPrice + wallPrice + furnPrice
@@ -795,25 +799,21 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
         setLoading(true)
         setError(null)
         try {
-            const furnitureNames = selectedProducts.map(id => products.find(p => p.id === id)?.name).filter(Boolean)
+            // Send product ids so the server prices everything from the catalogue.
             const requestBody = {
                 roomType,
                 width: validWidth,
                 length: validLength,
-                flooring: flooring && flooring.length > 0 ? flooring : null,
-                wallpaper: wallpaper && wallpaper.length > 0 ? wallpaper : null,
-                furnitureItems: furnitureNames,
+                flooringProductId: flooringProducts.find(f => f.name === flooring)?.id ?? null,
+                wallpaperProductId: wallpaperProducts.find(w => w.name === wallpaper)?.id ?? null,
+                furnitureProductIds: selectedProducts,
             }
 
-            const response = await fetch(API_ENDPOINTS.ROOM_BUILD(user.userId), {
+            const response = await authFetch(API_ENDPOINTS.ROOM_BUILD, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
             })
-            if (!response.ok) {
-                const errText = await response.text()
-                throw new Error(`Build failed: ${response.status} - ${errText}`)
-            }
+            if (!response.ok) throw new Error(await errorMessage(response, 'The room could not be built.'))
             const room = await response.json()
             setBuiltRoom(room)
             setStep(6)
@@ -831,13 +831,11 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
         setLoading(true)
         setError(null)
         try {
-            const response = await fetch(API_ENDPOINTS.ROOM_ADD_TO_CART(roomId, user.userId),
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ quantity: 1 }),
-                })
-            if (!response.ok) throw new Error(`Add to cart failed: ${response.status}`)
+            const response = await authFetch(API_ENDPOINTS.ROOM_ADD_TO_CART(roomId), {
+                method: 'POST',
+                body: JSON.stringify({ quantity: 1 }),
+            })
+            if (!response.ok) throw new Error(await errorMessage(response, 'Add to cart failed.'))
             setAddedToCart(true)
             setTimeout(() => setAddedToCart(false), 2200)
         } catch (e) {
@@ -855,17 +853,13 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
         setError(null)
         try {
             // Step 1: Add the built room to the user's cart
-            const addRes = await fetch(API_ENDPOINTS.ROOM_ADD_TO_CART(builtRoom.roomId, user.userId), {
+            // The response is the updated cart; PaymentPage creates the order from it.
+            const addRes = await authFetch(API_ENDPOINTS.ROOM_ADD_TO_CART(builtRoom.roomId), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ quantity: 1 }),
             })
-            if (!addRes.ok) throw new Error(`Could not add room to cart: ${addRes.status}`)
-
-            // Step 2: Fetch the updated cart (with cartId) so PaymentPage can create the order
-            const cartRes = await fetch(API_ENDPOINTS.CART(user.userId))
-            if (!cartRes.ok) throw new Error(`Could not fetch cart: ${cartRes.status}`)
-            const cartData = await cartRes.json()
+            if (!addRes.ok) throw new Error(await errorMessage(addRes, 'Could not add room to cart.'))
+            const cartData = await addRes.json()
 
             // Step 3: Forward the full cart object to App.jsx → PaymentPage
             onProceedToPayment?.(cartData)
@@ -907,7 +901,7 @@ export default function RoomBuilder({ user, onBack, onProceedToPayment }) {
                     )}
                     {step === 3 && (
                         <motion.div key="s3" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.32 }}>
-                            <Step3Wallpaper roomType={roomType} wallpaperProducts={wallpaperProducts} area={(width || 0) * (length || 0)} onSubmit={handleWallpaperSubmit} onBack={() => setStep(2)} />
+                            <Step3Wallpaper roomType={roomType} wallpaperProducts={wallpaperProducts} area={wallArea(width, length)} onSubmit={handleWallpaperSubmit} onBack={() => setStep(2)} />
                         </motion.div>
                     )}
                     {step === 4 && (

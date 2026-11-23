@@ -1,261 +1,156 @@
 package com.palette.palette.services;
 
-import com.palette.palette.dto.CustomRoomResponseDTO;
-import com.palette.palette.dto.RoomBuilderRequestDTO;
-import com.palette.palette.entities.CustomRoom;
-import com.palette.palette.entities.User;
-import com.palette.palette.exceptions.ResourceNotFoundException;
-import com.palette.palette.patterns.builder.RoomBuilder;
-import com.palette.palette.repository.CustomRoomRepository;
-import com.palette.palette.repository.ProductRepository;
-import com.palette.palette.repository.UserRepository;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import com.palette.palette.dto.CustomRoomResponseDTO;
+import com.palette.palette.dto.RoomBuilderRequestDTO;
+import com.palette.palette.entities.CustomRoom;
+import com.palette.palette.entities.Product;
+import com.palette.palette.entities.User;
+import com.palette.palette.exceptions.ResourceNotFoundException;
+import com.palette.palette.patterns.builder.RoomBuilder;
+import com.palette.palette.repository.CartRepository;
+import com.palette.palette.repository.CustomRoomRepository;
+import com.palette.palette.repository.ProductRepository;
+import com.palette.palette.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
 
 /**
- * Service class responsible for orchestrating the custom room building process.
+ * Room Builder: turns the user's choices into a {@link CustomRoom} using the
+ * {@link RoomBuilder} (Builder pattern).
  *
- * <p>This service acts as the bridge between the controller layer and the
- * {@link RoomBuilder} design pattern. It validates business rules, delegates
- * room assembly to {@link RoomBuilder}, persists results, and maps entities
- * to DTOs.</p>
- *
- * <p><b>Builder Pattern integration flow:</b></p>
- * <ol>
- * <li>Validate that the requesting user exists.</li>
- * <li>Create a {@link RoomBuilder} with mandatory Step 1 data (roomType, width, length).</li>
- * <li>Optionally call {@code setFlooring()} if flooring data is present.</li>
- * <li>Call {@code addFurniture()} for each furniture item.</li>
- * <li>Call {@code build()} — the builder validates all constraints and calculates the price.</li>
- * <li>Associate the compiled {@link CustomRoom} with the user and persist to the database.</li>
- * </ol>
+ * <p>Pricing (all from catalogue prices, never from the client):</p>
+ * <ul>
+ *   <li>flooring: price per sq ft × floor area (width × length)</li>
+ *   <li>wallpaper: price per sq ft × wall area (perimeter × {@value #WALL_HEIGHT_FT} ft)</li>
+ *   <li>furniture: sum of the chosen products</li>
+ * </ul>
  */
 @Service
+@RequiredArgsConstructor
 public class RoomBuilderService {
+
+    /** Standard ceiling height used to work out wall area. */
+    public static final int WALL_HEIGHT_FT = 10;
 
     private final CustomRoomRepository customRoomRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
+    private final CartRepository cartRepository;
 
-    /**
-     * Constructs a {@code RoomBuilderService} with its required dependencies.
-     *
-     * @param customRoomRepository the repository for {@link CustomRoom} persistence
-     * @param userRepository       the repository used to validate user existence
-     * @param productRepository    the repository to fetch product prices
-     */
-    public RoomBuilderService(CustomRoomRepository customRoomRepository,
-                              UserRepository userRepository,
-                              ProductRepository productRepository) {
-        this.customRoomRepository = customRoomRepository;
-        this.userRepository = userRepository;
-        this.productRepository = productRepository;
-    }
-
-    // -------------------------------------------------------------------------
-    // a) buildRoom — create and persist a new custom room
-    // -------------------------------------------------------------------------
-
-    /**
-     * Builds and persists a new {@link CustomRoom} for the given user using the Builder Pattern.
-     *
-     * <p>The method delegates validation and price calculation to {@link RoomBuilder#build()}.
-     * The resulting room is then associated with the authenticated user and saved to the database.</p>
-     *
-     * @param userId the ID of the user requesting the room build
-     * @param dto    the request body containing room configuration details
-     * @return a {@link CustomRoomResponseDTO} representing the newly created room
-     * @throws ResourceNotFoundException if no user exists with the given {@code userId}
-     * @throws IllegalArgumentException  if the builder rejects the input (e.g., missing furniture,
-     * invalid dimensions)
-     */
     @Transactional
     public CustomRoomResponseDTO buildRoom(Long userId, RoomBuilderRequestDTO dto) {
-        // Step 0: Validate user exists
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found with ID: " + userId));
-
-        // Step 1: Initialise builder with mandatory fields (roomType, width, length)
-        RoomBuilder builder;
-        try {
-            builder = new RoomBuilder(dto.getRoomType(), dto.getWidth(), dto.getLength());
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid room dimensions: " + ex.getMessage());
-        }
-
-        // Step 2: Optionally apply flooring
-        String flooring = dto.getFlooring();
-        if (flooring != null && !flooring.isBlank()) {
-            builder.setFlooring(flooring);
-        }
-
-        // Step 3: Optionally apply wallpaper
-        String wallpaper = dto.getWallpaper();
-        if (wallpaper != null && !wallpaper.isBlank()) {
-            builder.setWallpaper(wallpaper);
-        }
-
-        // Step 4: Add furniture items
-        if (dto.getFurnitureItems() != null) {
-            for (String item : dto.getFurnitureItems()) {
-                builder.addFurniture(item);
-            }
-        }
-
-        // Calculate Pricing using ProductRepository
-        double area = dto.getWidth() * dto.getLength();
-        double flooringPrice = 0.0;
-        if (flooring != null && !flooring.isBlank()) {
-            flooringPrice = productRepository.findByName(flooring)
-                    .map(p -> p.getPriceInPKR() * area)
-                    .orElse(0.0);
-        }
-
-        double wallpaperPrice = 0.0;
-        if (wallpaper != null && !wallpaper.isBlank()) {
-            wallpaperPrice = productRepository.findByName(wallpaper)
-                    .map(p -> p.getPriceInPKR() * area)
-                    .orElse(0.0);
-        }
-
-        double furniturePrice = 0.0;
-        if (dto.getFurnitureItems() != null) {
-            furniturePrice = dto.getFurnitureItems().stream()
-                    .mapToDouble(name -> productRepository.findByName(name)
-                            .map(com.palette.palette.entities.Product::getPriceInPKR)
-                            .orElse(0.0))
-                    .sum();
-        }
-
-        double finalPrice = flooringPrice + wallpaperPrice + furniturePrice;
-        builder.setTotalPrice(finalPrice);
-
-        // Final: Build — validates constraints and calculates totalPrice
-        CustomRoom room;
-        try {
-            room = builder.build();
-        } catch (IllegalStateException ex) {
-            throw new IllegalArgumentException("Room build failed: " + ex.getMessage());
-        }
-
-        // Associate room with the authenticated user and persist
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+        CustomRoom room = assemble(dto);
         room.setUser(user);
-        CustomRoom saved = customRoomRepository.save(room);
-
-        return toResponseDTO(saved);
+        return toResponseDTO(customRoomRepository.save(room));
     }
 
-    // -------------------------------------------------------------------------
-    // b) getRoomById — retrieve a single room with user-ownership validation
-    // -------------------------------------------------------------------------
-
     /**
-     * Retrieves a specific custom room by its ID, ensuring it belongs to the requesting user.
-     *
-     * @param roomId the ID of the custom room to retrieve
-     * @param userId the ID of the user who must own the room
-     * @return a {@link CustomRoomResponseDTO} for the matching room
-     * @throws ResourceNotFoundException if no room with the given ID exists for this user
-     */
-    @Transactional(readOnly = true)
-    public CustomRoomResponseDTO getRoomById(Long roomId, Long userId) {
-        CustomRoom room = customRoomRepository.findByIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Custom room not found with ID: " + roomId + " for user: " + userId));
-
-        return toResponseDTO(room);
-    }
-
-    // -------------------------------------------------------------------------
-    // c) getUserRooms — retrieve all rooms for a user
-    // -------------------------------------------------------------------------
-
-    /**
-     * Retrieves all custom rooms belonging to the specified user.
-     *
-     * @param userId the ID of the user whose rooms are to be retrieved
-     * @return a list of {@link CustomRoomResponseDTO} objects; empty if the user has no rooms
-     * @throws ResourceNotFoundException if no user exists with the given {@code userId}
-     */
-    @Transactional(readOnly = true)
-    public List<CustomRoomResponseDTO> getUserRooms(Long userId) {
-        // Verify the user exists before querying their rooms
-        if (!userRepository.existsById(userId)) {
-            throw new ResourceNotFoundException("User not found with ID: " + userId);
-        }
-
-        List<CustomRoom> rooms = customRoomRepository.findByUserId(userId);
-        return rooms.stream()
-                .map(this::toResponseDTO)
-                .collect(Collectors.toList());
-    }
-
-    // -------------------------------------------------------------------------
-    // d) updateRoom — replace an existing room with a newly built one
-    // -------------------------------------------------------------------------
-
-    /**
-     * Updates an existing custom room by deleting it and rebuilding it using the Builder Pattern.
-     *
-     * <p>Ownership is validated before any modification. The old room is deleted and a fresh
-     * {@link CustomRoom} is compiled from the provided DTO, ensuring price recalculation.</p>
-     *
-     * @param roomId the ID of the room to update
-     * @param userId the ID of the user who must own the room
-     * @param dto    the updated room configuration
-     * @return a {@link CustomRoomResponseDTO} representing the newly rebuilt room
-     * @throws ResourceNotFoundException if the room does not exist or does not belong to the user
-     * @throws IllegalArgumentException  if the builder rejects the updated configuration
+     * Rebuilds the room in place, keeping its id, so a room that is already in
+     * the cart stays in the cart (with the new price).
      */
     @Transactional
     public CustomRoomResponseDTO updateRoom(Long roomId, Long userId, RoomBuilderRequestDTO dto) {
-        // Validate ownership — throws if not found or not owned by this user
-        CustomRoom existingRoom = customRoomRepository.findByIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Custom room not found with ID: " + roomId + " for user: " + userId));
+        CustomRoom existing = findOwnedRoom(roomId, userId);
+        CustomRoom rebuilt = assemble(dto);
 
-        // Delete the old room before rebuilding
-        customRoomRepository.delete(existingRoom);
-        customRoomRepository.flush(); // ensure deletion is committed before re-insert
-
-        // Rebuild using the same buildRoom flow (which also validates user)
-        return buildRoom(userId, dto);
+        existing.setRoomType(rebuilt.getRoomType());
+        existing.setWidth(rebuilt.getWidth());
+        existing.setLength(rebuilt.getLength());
+        existing.setFlooring(rebuilt.getFlooring());
+        existing.setWallpaper(rebuilt.getWallpaper());
+        existing.getFurnitureItems().clear();
+        existing.getFurnitureItems().addAll(rebuilt.getFurnitureItems());
+        existing.setTotalPrice(rebuilt.getTotalPrice());
+        return toResponseDTO(existing);
     }
 
-    // -------------------------------------------------------------------------
-    // e) deleteRoom — remove a room with user-ownership validation
-    // -------------------------------------------------------------------------
+    @Transactional(readOnly = true)
+    public CustomRoomResponseDTO getRoomById(Long roomId, Long userId) {
+        return toResponseDTO(findOwnedRoom(roomId, userId));
+    }
 
-    /**
-     * Deletes a custom room by its ID after validating that it belongs to the requesting user.
-     *
-     * @param roomId the ID of the room to delete
-     * @param userId the ID of the user who must own the room
-     * @throws ResourceNotFoundException if no room with the given ID exists for this user
-     */
+    @Transactional(readOnly = true)
+    public List<CustomRoomResponseDTO> getUserRooms(Long userId) {
+        return customRoomRepository.findByUserId(userId).stream().map(this::toResponseDTO).toList();
+    }
+
+    /** Deletes the room and takes it out of the owner's cart first. */
     @Transactional
     public void deleteRoom(Long roomId, Long userId) {
-        CustomRoom room = customRoomRepository.findByIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Custom room not found with ID: " + roomId + " for user: " + userId));
-
+        CustomRoom room = findOwnedRoom(roomId, userId);
+        cartRepository.findByUserId(userId).ifPresent(cart -> {
+            cart.getItems().removeIf(line -> line.getCustomRoom() != null && roomId.equals(line.getCustomRoom().getId()));
+            cartRepository.flush(); // delete the cart lines before the room they point at
+        });
         customRoomRepository.delete(room);
     }
 
-    // -------------------------------------------------------------------------
-    // Private helper — entity to DTO mapping
-    // -------------------------------------------------------------------------
+    // ── Builder pattern in action ────────────────────────────────────────────
 
-    /**
-     * Maps a {@link CustomRoom} entity to a {@link CustomRoomResponseDTO}.
-     *
-     * @param room the {@link CustomRoom} entity to convert
-     * @return the corresponding {@link CustomRoomResponseDTO}
-     */
+    private CustomRoom assemble(RoomBuilderRequestDTO dto) {
+        String roomType = ECommerceService.parseEnum(Product.RoomType.class, dto.getRoomType(), "room type").name();
+        RoomBuilder builder = new RoomBuilder(roomType, dto.getWidth(), dto.getLength());
+
+        double price = 0;
+
+        if (dto.getFlooringProductId() != null) {
+            Product flooring = loadProduct(dto.getFlooringProductId(), Product.ProductCategory.FLOORING, "flooring");
+            builder.setFlooring(flooring.getName());
+            price += flooring.getPrice() * floorArea(dto.getWidth(), dto.getLength());
+        }
+
+        if (dto.getWallpaperProductId() != null) {
+            Product wallpaper = loadProduct(dto.getWallpaperProductId(), Product.ProductCategory.WALLPAPER, "wallpaper");
+            builder.setWallpaper(wallpaper.getName());
+            price += wallpaper.getPrice() * wallArea(dto.getWidth(), dto.getLength());
+        }
+
+        Map<Long, Product> furniture = productRepository.findAllById(dto.getFurnitureProductIds()).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        for (Long id : dto.getFurnitureProductIds()) {
+            Product piece = furniture.get(id);
+            if (piece == null) {
+                throw new IllegalArgumentException("Furniture product " + id + " does not exist.");
+            }
+            builder.addFurniture(piece.getName());
+            price += piece.getPrice();
+        }
+
+        return builder.setTotalPrice(Math.round(price * 100) / 100.0).build();
+    }
+
+    public static int floorArea(int width, int length) {
+        return width * length;
+    }
+
+    public static int wallArea(int width, int length) {
+        return 2 * (width + length) * WALL_HEIGHT_FT;
+    }
+
+    private Product loadProduct(Long id, Product.ProductCategory expected, String label) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("The chosen " + label + " (product " + id + ") does not exist."));
+        if (product.getCategory() != expected) {
+            throw new IllegalArgumentException("Product " + id + " is not a " + label + " product.");
+        }
+        return product;
+    }
+
+    private CustomRoom findOwnedRoom(Long roomId, Long userId) {
+        return customRoomRepository.findByIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Custom room not found with id: " + roomId));
+    }
+
     private CustomRoomResponseDTO toResponseDTO(CustomRoom room) {
         CustomRoomResponseDTO dto = new CustomRoomResponseDTO();
         dto.setRoomId(room.getId());
@@ -265,7 +160,7 @@ public class RoomBuilderService {
         dto.setLength(room.getLength());
         dto.setFlooring(room.getFlooring());
         dto.setWallpaper(room.getWallpaper());
-        dto.setFurnitureItems(room.getFurnitureItems());
+        dto.setFurnitureItems(List.copyOf(room.getFurnitureItems()));
         dto.setTotalPrice(room.getTotalPrice());
         dto.setCreatedAt(room.getCreatedAt());
         return dto;
